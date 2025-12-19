@@ -1,0 +1,75 @@
+# Crystal Reports to Oracle Data Type Mappings
+# =============================================
+# This file defines how Crystal Reports data types map to Oracle types.
+
+# Basic type mappings
+type_mappings:
+  String: VARCHAR2(4000)
+  Number: NUMBER
+  Currency: NUMBER(15,2)
+  Date: DATE
+  Time: DATE
+  DateTime: TIMESTAMP
+  Boolean: VARCHAR2(1)
+  Memo: CLOB
+  Blob: BLOB
+  Int: NUMBER
+  Integer: NUMBER
+  Double: NUMBER
+  Decimal: NUMBER
+  Text: VARCHAR2(4000)
+
+# PL/SQL variable types (for use in functions)
+plsql_types:
+  String: VARCHAR2(4000)
+  Number: NUMBER
+  Currency: NUMBER
+  Date: DATE
+  Time: DATE
+  DateTime: TIMESTAMP
+  Boolean: BOOLEAN
+  Memo: CLOB
+  Blob: BLOB
+
+# Format string mappings (Crystal -> Oracle)
+format_mappings:
+  # Number formats
+  "#,##0": "999,999,999,990"
+  "#,##0.00": "999,999,999,990.00"
+  "0.00": "990.00"
+  "0": "990"
+  "#,##0.00;(#,##0.00)": "999,999,999,990.00PR"
+  "0%": "990%"
+  "0.00%": "990.00%"
+
+  # Currency formats
+  "$#,##0": "$999,999,999,990"
+  "$#,##0.00": "$999,999,999,990.00"
+  "$#,##0.00;($#,##0.00)": "$999,999,999,990.00PR"
+
+  # Date formats
+  "MM/dd/yyyy": "MM/DD/YYYY"
+  "dd/MM/yyyy": "DD/MM/YYYY"
+  "yyyy-MM-dd": "YYYY-MM-DD"
+  "MMMM d, yyyy": "MONTH DD, YYYY"
+  "MMM d, yyyy": "MON DD, YYYY"
+  "M/d/yy": "MM/DD/YY"
+
+  # Time formats
+  "h:mm:ss tt": "HH:MI:SS AM"
+  "HH:mm:ss": "HH24:MI:SS"
+  "h:mm tt": "HH:MI AM"
+  "HH:mm": "HH24:MI"
+
+  # DateTime formats
+  "MM/dd/yyyy h:mm:ss tt": "MM/DD/YYYY HH:MI:SS AM"
+  "yyyy-MM-dd HH:mm:ss": "YYYY-MM-DD HH24:MI:SS"
+
+# Default values for null handling
+null_defaults:
+  String: "''"
+  Number: "0"
+  Currency: "0"
+  Date: "SYSDATE"
+  DateTime: "SYSTIMESTAMP"
+  Boolean: "'N'"

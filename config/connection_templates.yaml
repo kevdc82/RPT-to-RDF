@@ -1,0 +1,53 @@
+# Database Connection Templates
+# ==============================
+# This file maps Crystal Reports data sources to Oracle connections.
+# Add your specific connection mappings here.
+
+# Template connection mappings
+# Format: source_name: oracle_tns_name_or_connect_string
+connection_mappings:
+  # Example mappings (customize for your environment)
+  # Production_DB: PROD_ORCL
+  # Development_DB: DEV_ORCL
+  # Reporting_DB: //dbserver:1521/reporting.example.com
+
+# Connection type conversions
+# Specifies how to handle different connection types
+connection_types:
+  # ODBC connections - map DSN to TNS name
+  ODBC:
+    strategy: "map_dsn_to_tns"
+    default_port: 1521
+
+  # OLE DB connections - extract server/database
+  OLE_DB:
+    strategy: "extract_easy_connect"
+    default_port: 1521
+
+  # Native Oracle connections - pass through
+  Oracle:
+    strategy: "passthrough"
+
+  # SQL Server connections - may need migration
+  SQL_Server:
+    strategy: "map_to_oracle"
+    note: "SQL Server sources require database migration"
+
+# Default Oracle connection settings
+oracle_defaults:
+  port: 1521
+  service_name: "ORCL"
+  protocol: "TCP"
+
+# TNS entry template
+# Use {host}, {port}, {service_name} placeholders
+tns_template: |
+  {name} =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = {host})(PORT = {port}))
+      (CONNECT_DATA = (SERVICE_NAME = {service_name}))
+    )
+
+# Easy Connect string format
+# Format: //host:port/service_name
+easy_connect_template: "//{host}:{port}/{service_name}"

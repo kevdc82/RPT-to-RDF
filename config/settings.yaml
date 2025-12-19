@@ -1,0 +1,98 @@
+# RPT to RDF Converter - Main Configuration File
+# ================================================
+# This file configures the Crystal Reports to Oracle Reports batch converter.
+# Environment variables can override these settings (see documentation).
+
+# Extraction Settings
+# -------------------
+# Configuration for extracting Crystal Reports RPT files to XML
+extraction:
+  # Path to RptToXml executable
+  rpttoxml_path: "./tools/RptToXml/RptToXml.exe"
+
+  # Temporary directory for intermediate files
+  temp_directory: "./temp"
+
+  # Timeout for extracting a single RPT file (seconds)
+  timeout_seconds: 60
+
+  # Number of parallel workers for batch extraction
+  parallel_workers: 4
+
+  # Number of retry attempts for failed extractions
+  retry_attempts: 2
+
+# Oracle Reports Configuration
+# ----------------------------
+# Settings for Oracle Reports 12c environment
+oracle:
+  # Oracle home directory (e.g., C:\Oracle\Middleware\Oracle_Home)
+  # Can be overridden with ORACLE_HOME environment variable
+  home: ""
+
+  # Database connection string (user/password@database)
+  # Can be overridden with ORACLE_CONNECTION environment variable
+  connection: ""
+
+  # Reports server address
+  reports_server: "localhost:9002"
+
+# Path Configuration
+# ------------------
+# Directories for input, output, and logs
+paths:
+  # Directory containing RPT files to convert
+  input_directory: "./input"
+
+  # Directory for generated RDF files
+  output_directory: "./output"
+
+  # Directory for log files
+  log_directory: "./logs"
+
+# Conversion Settings
+# -------------------
+# Controls how the converter handles various scenarios
+conversion:
+  # Action for unsupported formulas: placeholder, skip, or fail
+  # - placeholder: Replace with a placeholder function that needs manual completion
+  # - skip: Skip the formula entirely (may affect report functionality)
+  # - fail: Stop conversion and report the error
+  on_unsupported_formula: "placeholder"
+
+  # Action for complex layouts: simplify, skip, or fail
+  on_complex_layout: "simplify"
+
+  # Action for subreports: inline, skip, or reference
+  # - inline: Attempt to inline subreport content
+  # - skip: Skip subreports entirely
+  # - reference: Create a reference placeholder
+  on_subreport: "inline"
+
+  # Naming conventions for Oracle Reports elements
+  formula_prefix: "CF_"
+  parameter_prefix: "P_"
+  field_prefix: "F_"
+
+  # Layout settings
+  coordinate_unit: "points"  # points, inches, or cm
+  default_font: "Arial"
+  default_font_size: 10
+
+# Logging Configuration
+# ---------------------
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Log message format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  # Log file path
+  file: "./logs/conversion.log"
+
+  # Enable console output
+  console_output: true
+
+  # Enable file output
+  file_output: true

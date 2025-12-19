@@ -1,0 +1,134 @@
+# Crystal Reports Formula to Oracle PL/SQL Function Mappings
+# ===========================================================
+# This file defines how Crystal Reports formula functions map to Oracle equivalents.
+
+# Format: crystal_function: oracle_template
+# Use {0}, {1}, {2} for positional arguments
+
+string_functions:
+  Left: "SUBSTR({0}, 1, {1})"
+  Right: "SUBSTR({0}, -1 * {1})"
+  Mid: "SUBSTR({0}, {1}, {2})"
+  Trim: "TRIM({0})"
+  LTrim: "LTRIM({0})"
+  RTrim: "RTRIM({0})"
+  Upper: "UPPER({0})"
+  UCase: "UPPER({0})"
+  Lower: "LOWER({0})"
+  LCase: "LOWER({0})"
+  Length: "LENGTH({0})"
+  Len: "LENGTH({0})"
+  InStr: "INSTR({0}, {1})"
+  InStrRev: "INSTR({0}, {1}, -1)"
+  Replace: "REPLACE({0}, {1}, {2})"
+  Space: "LPAD(' ', {0})"
+  Replicate: "RPAD({0}, LENGTH({0}) * {1}, {0})"
+  Chr: "CHR({0})"
+  Asc: "ASCII({0})"
+  Val: "TO_NUMBER({0})"
+  Str: "TO_CHAR({0})"
+  StrReverse: "REVERSE({0})"
+
+date_functions:
+  CurrentDate: "TRUNC(SYSDATE)"
+  CurrentDateTime: "SYSTIMESTAMP"
+  CurrentTime: "TO_CHAR(SYSDATE, 'HH24:MI:SS')"
+  Date: "TRUNC({0})"
+  Year: "EXTRACT(YEAR FROM {0})"
+  Month: "EXTRACT(MONTH FROM {0})"
+  Day: "EXTRACT(DAY FROM {0})"
+  Hour: "EXTRACT(HOUR FROM CAST({0} AS TIMESTAMP))"
+  Minute: "EXTRACT(MINUTE FROM CAST({0} AS TIMESTAMP))"
+  Second: "EXTRACT(SECOND FROM CAST({0} AS TIMESTAMP))"
+  DayOfWeek: "TO_NUMBER(TO_CHAR({0}, 'D'))"
+  WeekDay: "TO_NUMBER(TO_CHAR({0}, 'D'))"
+  DateSerial: "TO_DATE({0}||'-'||{1}||'-'||{2}, 'YYYY-MM-DD')"
+  DateValue: "TO_DATE({0}, 'YYYY-MM-DD')"
+  TimeValue: "TO_DATE({0}, 'HH24:MI:SS')"
+  Now: "SYSDATE"
+  Today: "TRUNC(SYSDATE)"
+
+# Special handling required - interval types differ
+date_arithmetic:
+  DateAdd:
+    note: "Requires special handling for interval type"
+    pattern: "({1} + NUMTODSINTERVAL({2}, '{0}'))"
+  DateDiff:
+    note: "Returns days by default - interval type ignored"
+    pattern: "({2} - {1})"
+
+numeric_functions:
+  Abs: "ABS({0})"
+  Round: "ROUND({0}, {1})"
+  Truncate: "TRUNC({0}, {1})"
+  Int: "TRUNC({0})"
+  Fix: "TRUNC({0})"
+  Mod: "MOD({0}, {1})"
+  Remainder: "REMAINDER({0}, {1})"
+  Sgn: "SIGN({0})"
+  Sign: "SIGN({0})"
+  Sqrt: "SQRT({0})"
+  Exp: "EXP({0})"
+  Log: "LN({0})"
+  Log10: "LOG(10, {0})"
+  Power: "POWER({0}, {1})"
+  Ceiling: "CEIL({0})"
+  Floor: "FLOOR({0})"
+
+trigonometric_functions:
+  Sin: "SIN({0})"
+  Cos: "COS({0})"
+  Tan: "TAN({0})"
+  Asin: "ASIN({0})"
+  Acos: "ACOS({0})"
+  Atan: "ATAN({0})"
+  Atn: "ATAN({0})"
+
+conversion_functions:
+  ToText: "TO_CHAR({0})"
+  ToNumber: "TO_NUMBER({0})"
+  ToWords: "TO_CHAR(TO_DATE({0}, 'J'), 'JSP')"
+  CStr: "TO_CHAR({0})"
+  CDbl: "TO_NUMBER({0})"
+  CDate: "TO_DATE({0})"
+  CBool: "CASE WHEN {0} THEN 'Y' ELSE 'N' END"
+
+null_handling:
+  IsNull: "({0} IS NULL)"
+  IsNothing: "({0} IS NULL)"
+  NV: "NVL({0}, {1})"
+
+logical_functions:
+  IIF: "CASE WHEN {0} THEN {1} ELSE {2} END"
+  # Switch and Choose require special parsing
+
+aggregate_functions:
+  Sum: "SUM({0})"
+  Avg: "AVG({0})"
+  Count: "COUNT({0})"
+  Max: "MAX({0})"
+  Min: "MIN({0})"
+  DistinctCount: "COUNT(DISTINCT {0})"
+
+# Unsupported functions that require manual conversion
+unsupported:
+  - WhilePrintingRecords
+  - WhileReadingRecords
+  - EvaluateAfter
+  - SharedVariable
+  - Shared
+  - Previous
+  - Next
+  - DrillDownGroupLevel
+  - GroupSelection
+  - RecordSelection
+
+# Crystal operators to Oracle operators
+operators:
+  "&": "||"            # String concatenation
+  "And": "AND"
+  "Or": "OR"
+  "Not": "NOT"
+  "<>": "!="
+  "=": "="
+  "Mod": "MOD"
