@@ -44,7 +44,7 @@ mypy src/                     # Type checking
 [RPT Files] → Extraction → Parsing → Transformation → Generation → [RDF Files]
 ```
 
-1. **Extraction** (`src/extraction/rpt_extractor.py`): Converts binary RPT to XML using RptToXml.exe (Windows-only tool in `tools/RptToXml/`)
+1. **Extraction** (`src/extraction/rpt_extractor.py`): Converts binary RPT to XML using RptToXml (Java or .NET version)
 2. **Parsing** (`src/parsing/crystal_parser.py`): Parses Crystal XML into `ReportModel` (defined in `src/parsing/report_model.py`)
 3. **Transformation** (`src/transformation/`): Maps Crystal elements to Oracle equivalents
 4. **Generation** (`src/generation/oracle_xml_generator.py`): Produces Oracle Reports XML format
@@ -71,7 +71,7 @@ The `--mock` flag uses `MockRptExtractor` and `MockRDFConverter` for testing wit
 ## Configuration
 
 Main config: `config/settings.yaml`
-- `extraction.rpttoxml_path`: Path to RptToXml.exe
+- `extraction.rpttoxml_path`: Path to RptToXml (Java: `./tools/RptToXmlJava/rpttoxml.sh` or .NET: `./tools/RptToXml/RptToXml.exe`)
 - `oracle.home`: ORACLE_HOME directory
 - `oracle.connection`: Database connection string
 - `conversion.on_unsupported_formula`: `placeholder` | `skip` | `fail`
@@ -96,11 +96,38 @@ Errors are categorized by `ErrorCategory` enum and collected in `ConversionRepor
 
 ## Platform Requirements
 
-- **Full pipeline**: Windows Server with Crystal Reports SDK and Oracle Reports 12c
+- **Full pipeline (extraction + conversion)**: Windows Server with Oracle Reports 12c (for rwconverter)
+- **Extraction only**: Any platform with Java 11+ (using RptToXml Java Edition)
 - **Development/Testing**: Any platform using `--mock` mode
-- **RptToXml**: Must be built on Windows (C# project requiring Crystal Reports assemblies)
+
+## RptToXml Extractors
+
+Two versions are available for extracting Crystal Reports structure to XML:
+
+### Java Edition (Recommended - Cross-platform)
+Located in `tools/RptToXmlJava/`. Works on Linux, macOS, and Windows.
+
+```bash
+cd tools/RptToXmlJava
+./build.sh                    # Build the JAR
+./rpttoxml.sh report.rpt      # Extract a report
+```
+
+Requires: Java 11+, Crystal Reports for Eclipse SDK (JARs in `lib/`)
+
+### .NET Edition (Windows only)
+Located in `tools/RptToXml/`. Legacy C# version.
+
+```bash
+# On Windows with Visual Studio
+cd tools/RptToXml
+msbuild RptToXml.sln
+```
+
+Requires: Windows, .NET Framework, Crystal Reports SDK
 
 ## Setup Scripts
 
-- `tools/setup_rpttoxml.ps1`: Windows PowerShell script to clone and build RptToXml
-- `tools/setup_rpttoxml.sh`: macOS/Linux script to clone RptToXml repo (build requires Windows)
+- `tools/RptToXmlJava/build.sh`: Build the Java extractor
+- `tools/setup_rpttoxml.ps1`: Windows PowerShell script to clone and build .NET RptToXml
+- `tools/setup_rpttoxml.sh`: macOS/Linux script to clone .NET RptToXml repo

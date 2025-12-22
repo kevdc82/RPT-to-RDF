@@ -1,10 +1,16 @@
 """
 RPT Extraction module for RPT to RDF Converter.
 
-Extracts Crystal Reports RPT files to XML format using the RptToXml
-command-line tool or Crystal Reports SDK.
+Extracts Crystal Reports RPT files to XML format using either:
+- RptToXml Java Edition (cross-platform: Linux, macOS, Windows)
+- RptToXml .NET Edition (Windows only)
+
+The extractor automatically detects which version is available.
 """
 
+import os
+import platform
+import shutil
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -44,6 +50,10 @@ class RptExtractor:
 
     Uses the RptToXml command-line tool to convert binary RPT files
     to human-readable XML that can be parsed for conversion.
+
+    Supports both:
+    - Java Edition (cross-platform): ./tools/RptToXmlJava/rpttoxml.sh
+    - .NET Edition (Windows only): ./tools/RptToXml/RptToXml.exe
     """
 
     def __init__(
@@ -56,7 +66,7 @@ class RptExtractor:
         """Initialize the RPT extractor.
 
         Args:
-            rpttoxml_path: Path to RptToXml executable.
+            rpttoxml_path: Path to RptToXml executable or script.
             temp_dir: Directory for temporary files.
             timeout_seconds: Timeout for extraction process.
             retry_attempts: Number of retry attempts on failure.
@@ -67,8 +77,43 @@ class RptExtractor:
         self.retry_attempts = retry_attempts
         self.logger = get_logger("rpt_extractor")
 
+        # Auto-detect extractor type
+        self.extractor_type = self._detect_extractor_type()
+        self.logger.info(f"Using RptToXml extractor: {self.extractor_type}")
+
         # Ensure temp directory exists
         self.temp_dir.mkdir(parents=True, exist_ok=True)
+
+    def _detect_extractor_type(self) -> str:
+        """Detect which RptToXml extractor to use.
+
+        Returns:
+            'java', 'dotnet', or 'unknown'
+        """
+        path_str = str(self.rpttoxml_path)
+
+        # Check if it's the Java version
+        if "RptToXmlJava" in path_str or path_str.endswith(".sh"):
+            return "java"
+
+        # Check if it's a .exe (Windows .NET version)
+        if path_str.endswith(".exe"):
+            return "dotnet"
+
+        # Try to auto-detect based on file existence
+        base_dir = self.rpttoxml_path.parent.parent
+        java_script = base_dir / "RptToXmlJava" / "rpttoxml.sh"
+        dotnet_exe = base_dir / "RptToXml" / "RptToXml.exe"
+
+        if java_script.exists() and shutil.which("java"):
+            self.rpttoxml_path = java_script
+            return "java"
+
+        if dotnet_exe.exists() and platform.system() == "Windows":
+            self.rpttoxml_path = dotnet_exe
+            return "dotnet"
+
+        return "unknown"
 
     def validate_setup(self) -> list[str]:
         """Validate that the extractor is properly configured.
@@ -79,7 +124,24 @@ class RptExtractor:
         errors = []
 
         if not self.rpttoxml_path.exists():
-            errors.append(f"RptToXml executable not found: {self.rpttoxml_path}")
+            errors.append(f"RptToXml not found: {self.rpttoxml_path}")
+
+        # Validate Java version requirements
+        if self.extractor_type == "java":
+            if not shutil.which("java"):
+                errors.append("Java runtime not found. Install Java 11+ to use RptToXml Java Edition.")
+            else:
+                # Check for built JAR
+                jar_path = self.rpttoxml_path.parent / "target" / "RptToXml.jar"
+                if not jar_path.exists():
+                    errors.append(
+                        f"RptToXml JAR not built. Run: cd {self.rpttoxml_path.parent} && ./build.sh"
+                    )
+
+        # Validate .NET version requirements
+        elif self.extractor_type == "dotnet":
+            if platform.system() != "Windows":
+                errors.append("RptToXml .NET Edition requires Windows. Use Java Edition on macOS/Linux.")
 
         if not self.temp_dir.exists():
             try:

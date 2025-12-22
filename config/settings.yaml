@@ -7,8 +7,11 @@
 # -------------------
 # Configuration for extracting Crystal Reports RPT files to XML
 extraction:
-  # Path to RptToXml executable
-  rpttoxml_path: "./tools/RptToXml/RptToXml.exe"
+  # Path to RptToXml executable or script
+  # Options:
+  #   - Java Edition (cross-platform): "./tools/RptToXmlJava/rpttoxml.sh"
+  #   - .NET Edition (Windows only): "./tools/RptToXml/RptToXml.exe"
+  rpttoxml_path: "./tools/RptToXmlJava/rpttoxml.sh"
 
   # Temporary directory for intermediate files
   temp_directory: "./temp"

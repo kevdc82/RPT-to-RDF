@@ -126,12 +126,20 @@ temp/
 *.rpt
 *.rdf
 
-# RptToXml build artifacts (keep source)
+# RptToXml .NET build artifacts (keep source)
 tools/RptToXml/RptToXml/bin/
 tools/RptToXml/RptToXml/obj/
 tools/RptToXml/*.exe
 tools/RptToXml/*.dll
 tools/RptToXml/*.pdb
+
+# RptToXml Java build artifacts (keep source and lib/)
+tools/RptToXmlJava/target/
+tools/RptToXmlJava/*.class
+
+# Keep Crystal Reports SDK JARs (exception to lib/ rule above)
+!tools/RptToXmlJava/lib/
+!tools/RptToXmlJava/lib/*.jar
 
 # Keep empty directories
 !logs/.gitkeep

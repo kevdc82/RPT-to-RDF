@@ -1,0 +1,23 @@
+# Build output
+target/
+
+# IDE files
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Note: lib/ contains Crystal Reports SDK JARs
+# These are large binary files but necessary for the build
+# Consider using Git LFS for these files in production
