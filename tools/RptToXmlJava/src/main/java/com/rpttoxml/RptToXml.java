@@ -13,7 +13,6 @@
 package com.rpttoxml;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
@@ -33,7 +32,9 @@ import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+// Crystal Reports SDK - use crystaldecisions (not crystaldecisions12) for local RPT file access
 import com.crystaldecisions.sdk.occa.report.application.ReportClientDocument;
+import com.crystaldecisions.sdk.occa.report.application.OpenReportOptions;
 import com.crystaldecisions.sdk.occa.report.application.DataDefController;
 import com.crystaldecisions.sdk.occa.report.application.DatabaseController;
 import com.crystaldecisions.sdk.occa.report.application.ReportDefController;
@@ -69,6 +70,18 @@ public class RptToXml {
                 System.exit(0);
             }
 
+            if (args[0].equals("--verbose")) {
+                extractor.verbose = true;
+                String[] newArgs = new String[args.length - 1];
+                System.arraycopy(args, 1, newArgs, 0, args.length - 1);
+                args = newArgs;
+            }
+
+            if (args.length == 0) {
+                printUsage();
+                System.exit(1);
+            }
+
             if (args[0].equals("-r") || args[0].equals("--recursive")) {
                 if (args.length < 2) {
                     System.err.println("Error: Directory path required for recursive mode");
@@ -100,6 +113,7 @@ public class RptToXml {
         System.out.println();
         System.out.println("Options:");
         System.out.println("  -r, --recursive    Process all .rpt files in directory recursively");
+        System.out.println("  --verbose          Show detailed error messages");
         System.out.println("  -h, --help         Show this help message");
         System.out.println("  -v, --version      Show version information");
         System.out.println();
@@ -152,17 +166,88 @@ public class RptToXml {
             throw new IllegalArgumentException("File not found: " + inputPath);
         }
 
+        // Get both absolute path and just the filename
+        String absolutePath = inputFile.getAbsolutePath();
+        String fileName = inputFile.getName();
+        File parentDir = inputFile.getParentFile();
+
         if (outputPath == null) {
-            outputPath = inputPath.replaceAll("(?i)\\.rpt$", ".xml");
+            outputPath = absolutePath.replaceAll("(?i)\\.rpt$", ".xml");
         }
 
-        System.out.println("Processing: " + inputPath);
+        System.out.println("Processing: " + absolutePath);
 
         ReportClientDocument clientDoc = new ReportClientDocument();
 
         try {
-            // Open the report
-            clientDoc.open(inputPath, 0);
+            // Configure to use in-process connection (required for local file access)
+            clientDoc.setReportAppServer(ReportClientDocument.inprocConnectionString);
+
+            // Try multiple approaches to open the report
+            // Note: Crystal Reports SDK resolves paths relative to the JAR file location
+            // The reportLocation tag in CRConfig.xml specifies where to find reports
+            Exception lastException = null;
+            boolean opened = false;
+
+            // Approach 1: Try filename only (when reportLocation is set in CRConfig.xml)
+            if (!opened) {
+                try {
+                    System.out.println("  Trying: filename only (" + fileName + ")");
+                    clientDoc.open(fileName, OpenReportOptions._openAsReadOnly);
+                    opened = true;
+                    System.out.println("  Success with filename only");
+                } catch (Exception e) {
+                    lastException = e;
+                    System.out.println("  Failed: " + e.getMessage());
+                }
+            }
+
+            // Approach 2: Try static openReport(File) method
+            if (!opened) {
+                try {
+                    System.out.println("  Trying: static openReport(File)");
+                    clientDoc = ReportClientDocument.openReport(inputFile);
+                    opened = true;
+                    System.out.println("  Success with static openReport(File)");
+                } catch (Exception e) {
+                    lastException = e;
+                    System.out.println("  Failed: " + e.getMessage());
+                }
+            }
+
+            // Approach 3: Try absolute path
+            if (!opened) {
+                try {
+                    System.out.println("  Trying: absolute path (" + absolutePath + ")");
+                    clientDoc = new ReportClientDocument();
+                    clientDoc.setReportAppServer(ReportClientDocument.inprocConnectionString);
+                    clientDoc.open(absolutePath, OpenReportOptions._openAsReadOnly);
+                    opened = true;
+                    System.out.println("  Success with absolute path");
+                } catch (Exception e) {
+                    lastException = e;
+                    System.out.println("  Failed: " + e.getMessage());
+                }
+            }
+
+            // Approach 4: Try with integer flag 0 instead of OpenReportOptions
+            if (!opened) {
+                try {
+                    System.out.println("  Trying: absolute path with flag 0");
+                    clientDoc = new ReportClientDocument();
+                    clientDoc.setReportAppServer(ReportClientDocument.inprocConnectionString);
+                    clientDoc.open(absolutePath, 0);
+                    opened = true;
+                    System.out.println("  Success with flag 0");
+                } catch (Exception e) {
+                    lastException = e;
+                    System.out.println("  Failed: " + e.getMessage());
+                }
+            }
+
+            if (!opened) {
+                throw lastException != null ? lastException : new Exception("Failed to open report");
+            }
 
             // Extract to XML
             Document xmlDoc = extractReportToXml(clientDoc, inputFile.getName());
@@ -210,7 +295,7 @@ public class RptToXml {
         extractDatabase(doc, root, dbController);
 
         // Extract report definition (layout)
-        extractReportDefinition(doc, root, reportDefController, clientDoc);
+        extractReportDefinition(doc, root, reportDefController);
 
         // Extract subreports
         extractSubreports(doc, root, subreportController);
@@ -237,9 +322,6 @@ public class RptToXml {
             // Groups
             extractGroups(doc, dataDefElement, dataDef);
 
-            // Sort fields
-            extractSortFields(doc, dataDefElement, dataDef);
-
             // Summary fields
             extractSummaryFields(doc, dataDefElement, dataDef);
 
@@ -261,30 +343,32 @@ public class RptToXml {
 
             Fields formulaFields = dataDef.getFormulaFields();
             for (int i = 0; i < formulaFields.size(); i++) {
-                IFormulaField formula = (IFormulaField) formulaFields.get(i);
+                try {
+                    IFormulaField formula = (IFormulaField) formulaFields.get(i);
 
-                Element formulaElement = doc.createElement("FormulaField");
-                formulaElement.setAttribute("name", safeString(formula.getName()));
-                formulaElement.setAttribute("headingText", safeString(formula.getHeadingText()));
+                    Element formulaElement = doc.createElement("FormulaField");
+                    formulaElement.setAttribute("name", safeString(formula.getName()));
+                    formulaElement.setAttribute("headingText", safeString(formula.getHeadingText()));
 
-                // Formula text
-                Element textElement = doc.createElement("Text");
-                textElement.setTextContent(safeString(formula.getText()));
-                formulaElement.appendChild(textElement);
+                    // Formula text
+                    Element textElement = doc.createElement("Text");
+                    textElement.setTextContent(safeString(formula.getText()));
+                    formulaElement.appendChild(textElement);
 
-                // Syntax
-                FormulaSyntax syntax = formula.getSyntax();
-                if (syntax != null) {
-                    formulaElement.setAttribute("syntax", syntax.toString());
+                    // Value type
+                    try {
+                        FieldValueType valueType = formula.getType();
+                        if (valueType != null) {
+                            formulaElement.setAttribute("valueType", valueType.toString());
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    formulasElement.appendChild(formulaElement);
+                } catch (Exception e) {
+                    // Skip this formula
                 }
-
-                // Value type
-                FieldValueType valueType = formula.getType();
-                if (valueType != null) {
-                    formulaElement.setAttribute("valueType", valueType.toString());
-                }
-
-                formulasElement.appendChild(formulaElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "FormulaFields", e);
@@ -301,40 +385,40 @@ public class RptToXml {
 
             Fields paramFields = dataDef.getParameterFields();
             for (int i = 0; i < paramFields.size(); i++) {
-                IParameterField param = (IParameterField) paramFields.get(i);
-
-                Element paramElement = doc.createElement("ParameterField");
-                paramElement.setAttribute("name", safeString(param.getName()));
-                paramElement.setAttribute("promptText", safeString(param.getPromptText()));
-                paramElement.setAttribute("reportName", safeString(param.getReportName()));
-
-                // Value type
-                FieldValueType valueType = param.getType();
-                if (valueType != null) {
-                    paramElement.setAttribute("valueType", valueType.toString());
-                }
-
-                // Allow multiple values
-                paramElement.setAttribute("allowMultipleValues",
-                    String.valueOf(param.getAllowMultipleValue()));
-
-                // Allow null
-                paramElement.setAttribute("allowNullValue",
-                    String.valueOf(param.getAllowNullValue()));
-
-                // Default values
                 try {
-                    IParameterFieldDiscreteValue defaultValue = param.getCurrentValue();
-                    if (defaultValue != null) {
-                        Element defaultElement = doc.createElement("DefaultValue");
-                        defaultElement.setTextContent(safeString(defaultValue.getValue()));
-                        paramElement.appendChild(defaultElement);
-                    }
-                } catch (Exception e) {
-                    // No default value
-                }
+                    IParameterField param = (IParameterField) paramFields.get(i);
 
-                paramsElement.appendChild(paramElement);
+                    Element paramElement = doc.createElement("ParameterField");
+                    paramElement.setAttribute("name", safeString(param.getName()));
+
+                    // Report name
+                    try {
+                        paramElement.setAttribute("reportName", safeString(param.getReportName()));
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    // Value type
+                    try {
+                        FieldValueType valueType = param.getType();
+                        if (valueType != null) {
+                            paramElement.setAttribute("valueType", valueType.toString());
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    // Allow null
+                    try {
+                        paramElement.setAttribute("allowNullValue", String.valueOf(param.getAllowNullValue()));
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    paramsElement.appendChild(paramElement);
+                } catch (Exception e) {
+                    // Skip this parameter
+                }
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "ParameterFields", e);
@@ -351,49 +435,28 @@ public class RptToXml {
 
             Groups groups = dataDef.getGroups();
             for (int i = 0; i < groups.size(); i++) {
-                IGroup group = groups.get(i);
+                try {
+                    IGroup group = (IGroup) groups.get(i);
 
-                Element groupElement = doc.createElement("Group");
-                groupElement.setAttribute("conditionFieldName",
-                    safeString(group.getConditionField().getName()));
+                    Element groupElement = doc.createElement("Group");
 
-                // Sort direction
-                GroupSortOrder sortOrder = group.getSortOrder();
-                if (sortOrder != null) {
-                    groupElement.setAttribute("sortOrder", sortOrder.toString());
+                    // Condition field
+                    try {
+                        IField condField = group.getConditionField();
+                        if (condField != null) {
+                            groupElement.setAttribute("conditionFieldName", safeString(condField.getName()));
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    groupsElement.appendChild(groupElement);
+                } catch (Exception e) {
+                    // Skip this group
                 }
-
-                groupsElement.appendChild(groupElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "Groups", e);
-        }
-    }
-
-    /**
-     * Extract sort fields.
-     */
-    private void extractSortFields(Document doc, Element parent, IDataDefinition dataDef) {
-        try {
-            Element sortsElement = doc.createElement("SortFields");
-            parent.appendChild(sortsElement);
-
-            SortFields sorts = dataDef.getSortFields();
-            for (int i = 0; i < sorts.size(); i++) {
-                ISortField sort = sorts.get(i);
-
-                Element sortElement = doc.createElement("SortField");
-                sortElement.setAttribute("fieldName", safeString(sort.getField().getName()));
-
-                SortDirection direction = sort.getDirection();
-                if (direction != null) {
-                    sortElement.setAttribute("direction", direction.toString());
-                }
-
-                sortsElement.appendChild(sortElement);
-            }
-        } catch (Exception e) {
-            addErrorElement(doc, parent, "SortFields", e);
         }
     }
 
@@ -407,25 +470,36 @@ public class RptToXml {
 
             Fields summaryFields = dataDef.getSummaryFields();
             for (int i = 0; i < summaryFields.size(); i++) {
-                ISummaryField summary = (ISummaryField) summaryFields.get(i);
+                try {
+                    ISummaryField summary = (ISummaryField) summaryFields.get(i);
 
-                Element summaryElement = doc.createElement("SummaryField");
-                summaryElement.setAttribute("name", safeString(summary.getName()));
+                    Element summaryElement = doc.createElement("SummaryField");
+                    summaryElement.setAttribute("name", safeString(summary.getName()));
 
-                // Summary operation
-                SummaryOperation operation = summary.getOperation();
-                if (operation != null) {
-                    summaryElement.setAttribute("operation", operation.toString());
+                    // Operation
+                    try {
+                        SummaryOperation operation = summary.getOperation();
+                        if (operation != null) {
+                            summaryElement.setAttribute("operation", operation.toString());
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    // Summarized field
+                    try {
+                        IField summarizedField = summary.getSummarizedField();
+                        if (summarizedField != null) {
+                            summaryElement.setAttribute("summarizedField", safeString(summarizedField.getName()));
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    summariesElement.appendChild(summaryElement);
+                } catch (Exception e) {
+                    // Skip this summary
                 }
-
-                // Summarized field
-                IField summarizedField = summary.getSummarizedField();
-                if (summarizedField != null) {
-                    summaryElement.setAttribute("summarizedField",
-                        safeString(summarizedField.getName()));
-                }
-
-                summariesElement.appendChild(summaryElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "SummaryFields", e);
@@ -442,25 +516,26 @@ public class RptToXml {
 
             Fields rtFields = dataDef.getRunningTotalFields();
             for (int i = 0; i < rtFields.size(); i++) {
-                IRunningTotalField rt = (IRunningTotalField) rtFields.get(i);
+                try {
+                    IRunningTotalField rt = (IRunningTotalField) rtFields.get(i);
 
-                Element rtElement = doc.createElement("RunningTotalField");
-                rtElement.setAttribute("name", safeString(rt.getName()));
+                    Element rtElement = doc.createElement("RunningTotalField");
+                    rtElement.setAttribute("name", safeString(rt.getName()));
 
-                // Operation
-                SummaryOperation operation = rt.getOperation();
-                if (operation != null) {
-                    rtElement.setAttribute("operation", operation.toString());
+                    // Operation
+                    try {
+                        SummaryOperation operation = rt.getOperation();
+                        if (operation != null) {
+                            rtElement.setAttribute("operation", operation.toString());
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    runningTotalsElement.appendChild(rtElement);
+                } catch (Exception e) {
+                    // Skip this running total
                 }
-
-                // Summarized field
-                IField summarizedField = rt.getSummarizedField();
-                if (summarizedField != null) {
-                    rtElement.setAttribute("summarizedField",
-                        safeString(summarizedField.getName()));
-                }
-
-                runningTotalsElement.appendChild(rtElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "RunningTotalFields", e);
@@ -482,48 +557,57 @@ public class RptToXml {
             dbElement.appendChild(tablesElement);
 
             for (int i = 0; i < tables.size(); i++) {
-                ITable table = tables.get(i);
+                try {
+                    ITable table = (ITable) tables.get(i);
 
-                Element tableElement = doc.createElement("Table");
-                tableElement.setAttribute("name", safeString(table.getName()));
-                tableElement.setAttribute("alias", safeString(table.getAlias()));
+                    Element tableElement = doc.createElement("Table");
+                    tableElement.setAttribute("name", safeString(table.getName()));
+                    tableElement.setAttribute("alias", safeString(table.getAlias()));
 
-                // Check if it's a command table (custom SQL)
-                if (table instanceof ICommandTable) {
-                    ICommandTable cmdTable = (ICommandTable) table;
-                    tableElement.setAttribute("type", "Command");
+                    // Check if it's a command table (custom SQL)
+                    if (table instanceof ICommandTable) {
+                        ICommandTable cmdTable = (ICommandTable) table;
+                        tableElement.setAttribute("type", "Command");
 
-                    Element sqlElement = doc.createElement("CommandText");
-                    sqlElement.setTextContent(safeString(cmdTable.getCommandText()));
-                    tableElement.appendChild(sqlElement);
-                } else {
-                    tableElement.setAttribute("type", "Table");
-                }
-
-                // Connection info
-                IConnectionInfo connInfo = table.getConnectionInfo();
-                if (connInfo != null) {
-                    Element connElement = doc.createElement("ConnectionInfo");
-
-                    PropertyBag attributes = connInfo.getAttributes();
-                    if (attributes != null) {
-                        connElement.setAttribute("serverName",
-                            safeString((String) attributes.get("QE_ServerDescription")));
-                        connElement.setAttribute("databaseName",
-                            safeString((String) attributes.get("QE_DatabaseName")));
+                        Element sqlElement = doc.createElement("CommandText");
+                        sqlElement.setTextContent(safeString(cmdTable.getCommandText()));
+                        tableElement.appendChild(sqlElement);
+                    } else {
+                        tableElement.setAttribute("type", "Table");
                     }
 
-                    tableElement.appendChild(connElement);
+                    // Connection info
+                    try {
+                        IConnectionInfo connInfo = table.getConnectionInfo();
+                        if (connInfo != null) {
+                            Element connElement = doc.createElement("ConnectionInfo");
+
+                            try {
+                                PropertyBag attributes = connInfo.getAttributes();
+                                if (attributes != null) {
+                                    Object server = attributes.get("QE_ServerDescription");
+                                    Object dbName = attributes.get("QE_DatabaseName");
+                                    if (server != null) connElement.setAttribute("serverName", server.toString());
+                                    if (dbName != null) connElement.setAttribute("databaseName", dbName.toString());
+                                }
+                            } catch (Exception e) {
+                                // Ignore
+                            }
+
+                            tableElement.appendChild(connElement);
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    // Fields in the table
+                    extractTableFields(doc, tableElement, table);
+
+                    tablesElement.appendChild(tableElement);
+                } catch (Exception e) {
+                    // Skip this table
                 }
-
-                // Fields in the table
-                extractTableFields(doc, tableElement, table);
-
-                tablesElement.appendChild(tableElement);
             }
-
-            // Table links (joins)
-            extractTableLinks(doc, dbElement, database);
 
         } catch (Exception e) {
             addErrorElement(doc, root, "Database", e);
@@ -540,18 +624,29 @@ public class RptToXml {
 
             Fields fields = table.getDataFields();
             for (int i = 0; i < fields.size(); i++) {
-                IField field = fields.get(i);
+                try {
+                    Object fieldObj = fields.get(i);
+                    if (fieldObj instanceof IField) {
+                        IField field = (IField) fieldObj;
 
-                Element fieldElement = doc.createElement("Field");
-                fieldElement.setAttribute("name", safeString(field.getName()));
-                fieldElement.setAttribute("headingText", safeString(field.getHeadingText()));
+                        Element fieldElement = doc.createElement("Field");
+                        fieldElement.setAttribute("name", safeString(field.getName()));
+                        fieldElement.setAttribute("headingText", safeString(field.getHeadingText()));
 
-                FieldValueType valueType = field.getType();
-                if (valueType != null) {
-                    fieldElement.setAttribute("valueType", valueType.toString());
+                        try {
+                            FieldValueType valueType = field.getType();
+                            if (valueType != null) {
+                                fieldElement.setAttribute("valueType", valueType.toString());
+                            }
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+
+                        fieldsElement.appendChild(fieldElement);
+                    }
+                } catch (Exception e) {
+                    // Skip this field
                 }
-
-                fieldsElement.appendChild(fieldElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, tableElement, "Fields", e);
@@ -559,83 +654,22 @@ public class RptToXml {
     }
 
     /**
-     * Extract table links (joins).
-     */
-    private void extractTableLinks(Document doc, Element dbElement, IDatabase database) {
-        try {
-            Element linksElement = doc.createElement("TableLinks");
-            dbElement.appendChild(linksElement);
-
-            TableLinks links = database.getTableLinks();
-            for (int i = 0; i < links.size(); i++) {
-                ITableLink link = links.get(i);
-
-                Element linkElement = doc.createElement("TableLink");
-                linkElement.setAttribute("sourceTable", safeString(link.getSourceTable().getName()));
-                linkElement.setAttribute("targetTable", safeString(link.getTargetTable().getName()));
-
-                // Join type
-                TableLinkType linkType = link.getJoinType();
-                if (linkType != null) {
-                    linkElement.setAttribute("joinType", linkType.toString());
-                }
-
-                // Link fields
-                TableLinkFields sourceFields = link.getSourceFields();
-                TableLinkFields targetFields = link.getTargetFields();
-
-                for (int j = 0; j < sourceFields.size(); j++) {
-                    Element linkFieldElement = doc.createElement("LinkField");
-                    linkFieldElement.setAttribute("sourceField",
-                        safeString(sourceFields.get(j).getName()));
-                    linkFieldElement.setAttribute("targetField",
-                        safeString(targetFields.get(j).getName()));
-                    linkElement.appendChild(linkFieldElement);
-                }
-
-                linksElement.appendChild(linkElement);
-            }
-        } catch (Exception e) {
-            addErrorElement(doc, dbElement, "TableLinks", e);
-        }
-    }
-
-    /**
      * Extract report definition (layout).
      */
-    private void extractReportDefinition(Document doc, Element root,
-            ReportDefController reportDefController, ReportClientDocument clientDoc) {
+    private void extractReportDefinition(Document doc, Element root, ReportDefController reportDefController) {
         try {
             Element layoutElement = doc.createElement("ReportDefinition");
             root.appendChild(layoutElement);
 
-            IReportDocument reportDoc = clientDoc.getReportDocument();
-
-            // Page options
-            extractPageOptions(doc, layoutElement, reportDoc);
+            // Get report definition
+            IReportDefinition reportDef = reportDefController.getReportDefinition();
 
             // Areas and sections
-            Areas areas = reportDoc.getReportDefController().getReportDefinition().getAreas();
+            Areas areas = reportDef.getAreas();
             extractAreas(doc, layoutElement, areas);
 
         } catch (Exception e) {
             addErrorElement(doc, root, "ReportDefinition", e);
-        }
-    }
-
-    /**
-     * Extract page options.
-     */
-    private void extractPageOptions(Document doc, Element parent, IReportDocument reportDoc) {
-        try {
-            Element pageElement = doc.createElement("PageOptions");
-            parent.appendChild(pageElement);
-
-            // Note: Page options access may vary by SDK version
-            // Add what's available
-
-        } catch (Exception e) {
-            // Page options not accessible, skip
         }
     }
 
@@ -648,34 +682,53 @@ public class RptToXml {
             parent.appendChild(areasElement);
 
             for (int i = 0; i < areas.size(); i++) {
-                IArea area = areas.get(i);
+                try {
+                    IArea area = (IArea) areas.get(i);
 
-                Element areaElement = doc.createElement("Area");
-                areaElement.setAttribute("name", safeString(area.getName()));
+                    Element areaElement = doc.createElement("Area");
+                    areaElement.setAttribute("name", safeString(area.getName()));
 
-                AreaKind kind = area.getKind();
-                if (kind != null) {
-                    areaElement.setAttribute("kind", kind.toString());
+                    try {
+                        AreaSectionKind kind = area.getKind();
+                        if (kind != null) {
+                            areaElement.setAttribute("kind", kind.toString());
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+
+                    // Sections within the area
+                    try {
+                        Sections sections = area.getSections();
+                        for (int j = 0; j < sections.size(); j++) {
+                            try {
+                                ISection section = (ISection) sections.get(j);
+
+                                Element sectionElement = doc.createElement("Section");
+                                sectionElement.setAttribute("name", safeString(section.getName()));
+
+                                try {
+                                    sectionElement.setAttribute("height", String.valueOf(section.getHeight()));
+                                } catch (Exception e) {
+                                    // Ignore
+                                }
+
+                                // Report objects in section
+                                extractReportObjects(doc, sectionElement, section);
+
+                                areaElement.appendChild(sectionElement);
+                            } catch (Exception e) {
+                                // Skip this section
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Ignore sections
+                    }
+
+                    areasElement.appendChild(areaElement);
+                } catch (Exception e) {
+                    // Skip this area
                 }
-
-                // Sections within the area
-                Sections sections = area.getSections();
-                for (int j = 0; j < sections.size(); j++) {
-                    ISection section = sections.get(j);
-
-                    Element sectionElement = doc.createElement("Section");
-                    sectionElement.setAttribute("name", safeString(section.getName()));
-                    sectionElement.setAttribute("height", String.valueOf(section.getHeight()));
-                    sectionElement.setAttribute("suppress",
-                        String.valueOf(section.getSuppressed()));
-
-                    // Report objects in section
-                    extractReportObjects(doc, sectionElement, section);
-
-                    areaElement.appendChild(sectionElement);
-                }
-
-                areasElement.appendChild(areaElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, parent, "Areas", e);
@@ -692,62 +745,89 @@ public class RptToXml {
 
             ReportObjects objects = section.getReportObjects();
             for (int i = 0; i < objects.size(); i++) {
-                IReportObject obj = objects.get(i);
+                try {
+                    IReportObject obj = (IReportObject) objects.get(i);
 
-                Element objElement = doc.createElement("ReportObject");
-                objElement.setAttribute("name", safeString(obj.getName()));
-                objElement.setAttribute("kind", obj.getKind().toString());
+                    Element objElement = doc.createElement("ReportObject");
+                    objElement.setAttribute("name", safeString(obj.getName()));
 
-                // Position and size
-                objElement.setAttribute("left", String.valueOf(obj.getLeft()));
-                objElement.setAttribute("top", String.valueOf(obj.getTop()));
-                objElement.setAttribute("width", String.valueOf(obj.getWidth()));
-                objElement.setAttribute("height", String.valueOf(obj.getHeight()));
-
-                // Suppression
-                objElement.setAttribute("suppress",
-                    String.valueOf(obj.getObjectFormat().getSuppressed()));
-
-                // Type-specific handling
-                if (obj instanceof IFieldObject) {
-                    IFieldObject fieldObj = (IFieldObject) obj;
-                    objElement.setAttribute("type", "Field");
-
-                    IFieldDefinition fieldDef = fieldObj.getDataSource();
-                    if (fieldDef != null) {
-                        objElement.setAttribute("dataSource",
-                            safeString(fieldDef.getFormulaForm()));
+                    try {
+                        objElement.setAttribute("kind", obj.getKind().toString());
+                    } catch (Exception e) {
+                        // Ignore
                     }
 
-                } else if (obj instanceof ITextObject) {
-                    ITextObject textObj = (ITextObject) obj;
-                    objElement.setAttribute("type", "Text");
+                    // Position and size
+                    try {
+                        objElement.setAttribute("left", String.valueOf(obj.getLeft()));
+                        objElement.setAttribute("top", String.valueOf(obj.getTop()));
+                        objElement.setAttribute("width", String.valueOf(obj.getWidth()));
+                        objElement.setAttribute("height", String.valueOf(obj.getHeight()));
+                    } catch (Exception e) {
+                        // Ignore
+                    }
 
-                    Paragraphs paragraphs = textObj.getParagraphs();
-                    StringBuilder textContent = new StringBuilder();
-                    for (int p = 0; p < paragraphs.size(); p++) {
-                        IParagraph para = paragraphs.get(p);
-                        ParagraphElements elements = para.getParagraphElements();
-                        for (int e = 0; e < elements.size(); e++) {
-                            IParagraphElement pe = elements.get(e);
-                            if (pe instanceof IParagraphTextElement) {
-                                textContent.append(((IParagraphTextElement) pe).getText());
+                    // Type-specific handling
+                    if (obj instanceof IFieldObject) {
+                        IFieldObject fieldObj = (IFieldObject) obj;
+                        objElement.setAttribute("type", "Field");
+
+                        try {
+                            // getDataSource() returns Object - try to get formula form
+                            Object dataSource = fieldObj.getDataSource();
+                            if (dataSource != null) {
+                                // Try to cast to IField which has getFormulaForm()
+                                if (dataSource instanceof IField) {
+                                    IField fieldDef = (IField) dataSource;
+                                    objElement.setAttribute("dataSource", safeString(fieldDef.getFormulaForm()));
+                                } else {
+                                    // Fallback to toString
+                                    objElement.setAttribute("dataSource", safeString(dataSource.toString()));
+                                }
                             }
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+
+                    } else if (obj instanceof ITextObject) {
+                        ITextObject textObj = (ITextObject) obj;
+                        objElement.setAttribute("type", "Text");
+
+                        try {
+                            Paragraphs paragraphs = textObj.getParagraphs();
+                            StringBuilder textContent = new StringBuilder();
+                            for (int p = 0; p < paragraphs.size(); p++) {
+                                IParagraph para = (IParagraph) paragraphs.get(p);
+                                ParagraphElements elements = para.getParagraphElements();
+                                for (int pe = 0; pe < elements.size(); pe++) {
+                                    IParagraphElement elem = (IParagraphElement) elements.get(pe);
+                                    if (elem instanceof IParagraphTextElement) {
+                                        textContent.append(((IParagraphTextElement) elem).getText());
+                                    }
+                                }
+                            }
+
+                            Element textElement = doc.createElement("Text");
+                            textElement.setTextContent(textContent.toString());
+                            objElement.appendChild(textElement);
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+
+                    } else if (obj instanceof ISubreportObject) {
+                        objElement.setAttribute("type", "Subreport");
+                        ISubreportObject subObj = (ISubreportObject) obj;
+                        try {
+                            objElement.setAttribute("subreportName", safeString(subObj.getSubreportName()));
+                        } catch (Exception e) {
+                            // Ignore
                         }
                     }
 
-                    Element textElement = doc.createElement("Text");
-                    textElement.setTextContent(textContent.toString());
-                    objElement.appendChild(textElement);
-
-                } else if (obj instanceof ISubreportObject) {
-                    objElement.setAttribute("type", "Subreport");
-                    ISubreportObject subObj = (ISubreportObject) obj;
-                    objElement.setAttribute("subreportName",
-                        safeString(subObj.getSubreportName()));
+                    objectsElement.appendChild(objElement);
+                } catch (Exception e) {
+                    // Skip this object
                 }
-
-                objectsElement.appendChild(objElement);
             }
         } catch (Exception e) {
             addErrorElement(doc, sectionElement, "ReportObjects", e);
@@ -765,29 +845,68 @@ public class RptToXml {
             IStrings subreportNames = subreportController.getSubreportNames();
 
             for (int i = 0; i < subreportNames.size(); i++) {
-                String name = subreportNames.get(i);
-
-                Element subreportElement = doc.createElement("Subreport");
-                subreportElement.setAttribute("name", safeString(name));
-
-                // Get subreport links
                 try {
-                    SubreportLinks links = subreportController.getSubreportLinks(name);
-                    for (int j = 0; j < links.size(); j++) {
-                        ISubreportLink link = links.get(j);
+                    // IStrings.get() may return String or Object depending on SDK version
+                    Object nameObj = subreportNames.get(i);
+                    String name = nameObj != null ? nameObj.toString() : "";
 
-                        Element linkElement = doc.createElement("SubreportLink");
-                        linkElement.setAttribute("mainReportField",
-                            safeString(link.getMainReportFieldName()));
-                        linkElement.setAttribute("subreportParameter",
-                            safeString(link.getSubreportParameterFieldName()));
-                        subreportElement.appendChild(linkElement);
+                    Element subreportElement = doc.createElement("Subreport");
+                    subreportElement.setAttribute("name", safeString(name));
+
+                    // Get subreport links
+                    try {
+                        SubreportLinks links = subreportController.getSubreportLinks(name);
+                        for (int j = 0; j < links.size(); j++) {
+                            try {
+                                ISubreportLink link = (ISubreportLink) links.get(j);
+
+                                Element linkElement = doc.createElement("SubreportLink");
+                                linkElement.setAttribute("mainReportField",
+                                    safeString(link.getMainReportFieldName()));
+
+                                // Try to get subreport parameter name via reflection
+                                // since getLinkedParameterField() may not exist in this SDK version
+                                try {
+                                    java.lang.reflect.Method method = link.getClass().getMethod("getLinkedParameterField");
+                                    Object paramField = method.invoke(link);
+                                    if (paramField != null) {
+                                        // Try to get name from the parameter field
+                                        java.lang.reflect.Method getName = paramField.getClass().getMethod("getName");
+                                        Object paramName = getName.invoke(paramField);
+                                        if (paramName != null) {
+                                            linkElement.setAttribute("subreportParameter",
+                                                safeString(paramName.toString()));
+                                        }
+                                    }
+                                } catch (NoSuchMethodException nsme) {
+                                    // Method doesn't exist in this SDK version, try alternative
+                                    try {
+                                        java.lang.reflect.Method method = link.getClass().getMethod("getSubreportParameterFieldName");
+                                        Object paramName = method.invoke(link);
+                                        if (paramName != null) {
+                                            linkElement.setAttribute("subreportParameter",
+                                                safeString(paramName.toString()));
+                                        }
+                                    } catch (Exception ex) {
+                                        // Ignore - method not available
+                                    }
+                                } catch (Exception e) {
+                                    // Ignore
+                                }
+
+                                subreportElement.appendChild(linkElement);
+                            } catch (Exception e) {
+                                // Skip this link
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Links not accessible
                     }
-                } catch (Exception e) {
-                    // Links not accessible
-                }
 
-                subreportsElement.appendChild(subreportElement);
+                    subreportsElement.appendChild(subreportElement);
+                } catch (Exception e) {
+                    // Skip this subreport
+                }
             }
         } catch (Exception e) {
             addErrorElement(doc, root, "Subreports", e);
@@ -817,12 +936,14 @@ public class RptToXml {
         errorElement.setAttribute("context", context);
         errorElement.setAttribute("message", safeString(e.getMessage()));
 
-        // Stack trace
-        StringWriter sw = new StringWriter();
-        e.printStackTrace(new PrintWriter(sw));
-        Element stackElement = doc.createElement("StackTrace");
-        stackElement.setTextContent(sw.toString());
-        errorElement.appendChild(stackElement);
+        if (verbose) {
+            // Stack trace
+            StringWriter sw = new StringWriter();
+            e.printStackTrace(new PrintWriter(sw));
+            Element stackElement = doc.createElement("StackTrace");
+            stackElement.setTextContent(sw.toString());
+            errorElement.appendChild(stackElement);
+        }
 
         parent.appendChild(errorElement);
     }

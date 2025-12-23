@@ -11,6 +11,9 @@ python-dotenv>=1.0.0
 # XML processing
 lxml>=4.9.0
 
+# Microsoft Access MDB file parsing (for data migration)
+access-parser>=0.0.6
+
 # Rich console output and progress bars
 rich>=13.0.0
 

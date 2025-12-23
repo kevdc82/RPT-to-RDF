@@ -1,0 +1,72 @@
+# Docker Compose for Oracle Reports 12c
+#
+# This sets up Oracle Database + Oracle Reports for RDF conversion.
+#
+# Prerequisites:
+#   - Docker Desktop with 8GB+ memory allocated
+#   - Oracle container registry login (for database image)
+#     docker login container-registry.oracle.com
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose logs -f
+#
+
+version: '3.8'
+
+services:
+  # Oracle Database XE (required for Reports metadata repository)
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: oracle-db
+    hostname: oracle-db
+    environment:
+      - ORACLE_PWD=${ORACLE_PWD:-OracleReports123}
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    networks:
+      - oranet
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "sys/${ORACLE_PWD:-OracleReports123}@//localhost:1521/XE as sysdba", "@/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+  # Note: Oracle Reports 12c image must be built manually
+  # See README.md for build instructions
+  #
+  # Uncomment after building the oracle-reports image:
+  #
+  # oracle-reports:
+  #   image: oracle/reports:12.2.1.4
+  #   container_name: oracle-reports
+  #   hostname: oracle-reports
+  #   depends_on:
+  #     oracle-db:
+  #       condition: service_healthy
+  #   environment:
+  #     - ORACLE_HOME=/u01/oracle/product/12c
+  #     - DB_HOST=oracle-db
+  #     - DB_PORT=1521
+  #     - DB_SERVICE=XE
+  #     - DB_PASSWORD=${ORACLE_PWD:-OracleReports123}
+  #   ports:
+  #     - "7001:7001"   # WebLogic Admin Console
+  #     - "9002:9002"   # Reports Server
+  #   volumes:
+  #     - reports-domain:/u01/oracle/user_projects
+  #     - ./shared:/shared
+  #   networks:
+  #     - oranet
+
+networks:
+  oranet:
+    driver: bridge
+
+volumes:
+  oracle-data:
+  reports-domain:

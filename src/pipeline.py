@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .config import Config, get_config
-from .extraction.rpt_extractor import RptExtractor, ExtractionResult, MockRptExtractor
+from .extraction.rpt_extractor import RptExtractor, DockerRptExtractor, ExtractionResult, MockRptExtractor
 from .parsing.crystal_parser import CrystalParser
 from .parsing.report_model import ReportModel
 from .transformation.transformer import Transformer, TransformedReport
@@ -54,15 +54,18 @@ class Pipeline:
         self,
         config: Optional[Config] = None,
         use_mock: bool = False,
+        skip_rdf: bool = False,
     ):
         """Initialize the pipeline.
 
         Args:
             config: Configuration object. If None, loads default config.
             use_mock: If True, use mock extractors/converters for testing.
+            skip_rdf: If True, skip RDF conversion (output XML instead).
         """
         self.config = config or get_config()
         self.use_mock = use_mock
+        self.skip_rdf = skip_rdf
         self.logger = get_logger("pipeline")
 
         # Initialize components
@@ -78,12 +81,24 @@ class Pipeline:
                 db_connection=self.config.oracle.connection or "mock/mock@mock",
             )
         else:
-            self.extractor = RptExtractor(
-                rpttoxml_path=self.config.extraction.rpttoxml_path,
-                temp_dir=self.config.extraction.temp_directory,
-                timeout_seconds=self.config.extraction.timeout_seconds,
-                retry_attempts=self.config.extraction.retry_attempts,
-            )
+            # Select extractor based on mode
+            extraction_mode = self.config.extraction.mode
+            if extraction_mode == "docker":
+                self.extractor = DockerRptExtractor(
+                    temp_dir=self.config.extraction.temp_directory,
+                    timeout_seconds=self.config.extraction.timeout_seconds,
+                    retry_attempts=self.config.extraction.retry_attempts,
+                    docker_image=self.config.extraction.docker.image,
+                )
+            else:
+                # java or dotnet mode
+                self.extractor = RptExtractor(
+                    rpttoxml_path=self.config.extraction.rpttoxml_path,
+                    temp_dir=self.config.extraction.temp_directory,
+                    timeout_seconds=self.config.extraction.timeout_seconds,
+                    retry_attempts=self.config.extraction.retry_attempts,
+                )
+
             self.rdf_converter = RDFConverter(
                 oracle_home=self.config.oracle.home,
                 db_connection=self.config.oracle.connection,
@@ -160,21 +175,32 @@ class Pipeline:
             result.errors.append(f"XML generation failed: {str(e)}")
             return result
 
-        # Stage 5: Convert XML to RDF
-        rdf_result = self.rdf_converter.convert(xml_path, output_path)
-        result.rdf_result = rdf_result
+        # Stage 5: Convert XML to RDF (skip if skip_rdf is True)
+        if self.skip_rdf:
+            # When skipping RDF, the XML file is the final output
+            result.rdf_path = xml_path
 
-        if rdf_result.success:
-            result.rdf_path = output_path
-
-            # Determine final status
+            # Determine final status based on transformation
             if transformed.elements_with_issues > 0:
                 result.status = "partial"
                 result.warnings.extend(transformed.warnings)
             else:
                 result.status = "success"
         else:
-            result.errors.append(f"RDF conversion failed: {rdf_result.error.message}")
+            rdf_result = self.rdf_converter.convert(xml_path, output_path)
+            result.rdf_result = rdf_result
+
+            if rdf_result.success:
+                result.rdf_path = output_path
+
+                # Determine final status
+                if transformed.elements_with_issues > 0:
+                    result.status = "partial"
+                    result.warnings.extend(transformed.warnings)
+                else:
+                    result.status = "success"
+            else:
+                result.errors.append(f"RDF conversion failed: {rdf_result.error.message}")
 
         return result
 
@@ -295,15 +321,16 @@ class Pipeline:
         """
         errors = []
 
-        # Validate config
-        errors.extend(self.config.validate())
+        # Validate config (skip RDF-related validation if skip_rdf is True)
+        if not self.skip_rdf:
+            errors.extend(self.config.validate())
 
         # Validate extractor setup
         if not self.use_mock:
             errors.extend(self.extractor.validate_setup())
 
-        # Validate RDF converter setup
-        if not self.use_mock:
+        # Validate RDF converter setup (skip if skip_rdf is True)
+        if not self.use_mock and not self.skip_rdf:
             errors.extend(self.rdf_converter.validate_setup())
 
         return errors

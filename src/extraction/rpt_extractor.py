@@ -392,6 +392,176 @@ class RptExtractor:
         return count
 
 
+class DockerRptExtractor(RptExtractor):
+    """Docker-based RPT extractor for macOS and cross-platform use.
+
+    Uses the rpttoxml Docker container which has the Crystal Reports
+    Java SDK configured to work on Linux. This is required for macOS
+    since the Crystal Reports SDK has path resolution issues on macOS.
+    """
+
+    def __init__(
+        self,
+        temp_dir: str,
+        timeout_seconds: int = 120,
+        retry_attempts: int = 2,
+        docker_image: str = "rpttoxml:latest",
+    ):
+        """Initialize the Docker RPT extractor.
+
+        Args:
+            temp_dir: Directory for temporary/output files.
+            timeout_seconds: Timeout for extraction process.
+            retry_attempts: Number of retry attempts on failure.
+            docker_image: Docker image name for rpttoxml.
+        """
+        self.temp_dir = Path(temp_dir)
+        self.timeout_seconds = timeout_seconds
+        self.retry_attempts = retry_attempts
+        self.docker_image = docker_image
+        self.logger = get_logger("docker_rpt_extractor")
+        self.extractor_type = "docker"
+
+        # Ensure temp directory exists
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
+
+        self.logger.info(f"Using Docker RptToXml extractor: {docker_image}")
+
+    def validate_setup(self) -> list[str]:
+        """Validate that Docker is available and image exists."""
+        errors = []
+
+        # Check if Docker is available
+        if not shutil.which("docker"):
+            errors.append("Docker is not installed or not in PATH")
+            return errors
+
+        # Check if Docker daemon is running
+        try:
+            result = subprocess.run(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                errors.append("Docker daemon is not running")
+                return errors
+        except Exception as e:
+            errors.append(f"Cannot connect to Docker: {e}")
+            return errors
+
+        # Check if image exists
+        try:
+            result = subprocess.run(
+                ["docker", "image", "inspect", self.docker_image],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                errors.append(
+                    f"Docker image '{self.docker_image}' not found. "
+                    f"Build it with: cd docker/rpttoxml && ./build.sh"
+                )
+        except Exception as e:
+            errors.append(f"Cannot check Docker image: {e}")
+
+        return errors
+
+    def _run_rpttoxml(self, rpt_file: Path, xml_path: Path) -> ExtractionResult:
+        """Run RptToXml in Docker container.
+
+        The Crystal Reports SDK requires the report file to be in the same
+        directory as the JAR files. We mount the single RPT file to /app/
+        and use just the filename when opening.
+        """
+        start_time = time.time()
+
+        # Get absolute paths
+        rpt_file = rpt_file.resolve()
+        xml_path = xml_path.resolve()
+        output_dir = xml_path.parent
+
+        # Ensure output directory exists
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build Docker command
+        # Mount the RPT file directly to /app/<filename> and output dir to /reports/output
+        cmd = [
+            "docker", "run", "--rm",
+            "-v", f"{rpt_file}:/app/{rpt_file.name}:ro",
+            "-v", f"{output_dir}:/reports/output",
+            self.docker_image,
+            rpt_file.name,  # Just the filename, not full path
+            f"/reports/output/{xml_path.name}",
+        ]
+
+        self.logger.debug(f"Running Docker command: {' '.join(cmd)}")
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
+            )
+
+            duration = time.time() - start_time
+
+            # Check if XML was created
+            if xml_path.exists() and xml_path.stat().st_size > 0:
+                return ExtractionResult(
+                    rpt_path=rpt_file,
+                    success=True,
+                    xml_path=xml_path,
+                    duration_seconds=duration,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                )
+
+            # XML not created or empty - extraction failed
+            error_msg = result.stderr or result.stdout or "No output produced"
+            return ExtractionResult(
+                rpt_path=rpt_file,
+                success=False,
+                error=ConversionError(
+                    category=ErrorCategory.EXTRACTION_FAILED,
+                    message=f"Docker RptToXml failed: {error_msg[:500]}",
+                    is_fatal=True,
+                    context={"return_code": result.returncode},
+                ),
+                duration_seconds=duration,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+
+        except subprocess.TimeoutExpired:
+            return ExtractionResult(
+                rpt_path=rpt_file,
+                success=False,
+                error=ConversionError(
+                    category=ErrorCategory.EXTRACTION_TIMEOUT,
+                    message=f"Docker extraction timed out after {self.timeout_seconds} seconds",
+                    is_fatal=True,
+                    suggested_fix="Try increasing the timeout or check Docker resources",
+                ),
+                duration_seconds=self.timeout_seconds,
+            )
+
+        except Exception as e:
+            return ExtractionResult(
+                rpt_path=rpt_file,
+                success=False,
+                error=ConversionError(
+                    category=ErrorCategory.EXTRACTION_FAILED,
+                    message=f"Docker extraction error: {str(e)}",
+                    is_fatal=True,
+                ),
+                duration_seconds=time.time() - start_time,
+            )
+
+
 class MockRptExtractor(RptExtractor):
     """Mock extractor for testing without Crystal Reports runtime.
 

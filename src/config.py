@@ -15,18 +15,48 @@ from dotenv import load_dotenv
 
 
 @dataclass
+class ExtractionDockerConfig:
+    """Configuration for Docker-based RPT extraction."""
+    image: str = "rpttoxml:latest"
+
+
+@dataclass
 class ExtractionConfig:
     """Configuration for RPT extraction."""
-    rpttoxml_path: str = "./tools/RptToXml/RptToXml.exe"
+    # Mode: "docker", "java", or "dotnet"
+    mode: str = "docker"
+
+    # Docker settings
+    docker: ExtractionDockerConfig = field(default_factory=ExtractionDockerConfig)
+
+    # Path to RptToXml (for java/dotnet modes)
+    rpttoxml_path: str = "./tools/RptToXmlJava/rpttoxml.sh"
     temp_directory: str = "./temp"
-    timeout_seconds: int = 60
+    timeout_seconds: int = 120
     parallel_workers: int = 4
     retry_attempts: int = 2
 
 
 @dataclass
+class OracleDockerConfig:
+    """Configuration for Docker-based Oracle Reports."""
+    container: str = "oracle-reports"
+    oracle_home: str = "/u01/oracle/product/12c"
+    db_host: str = "oracle-db"
+    db_port: int = 1521
+    db_service: str = "XE"
+
+
+@dataclass
 class OracleConfig:
     """Configuration for Oracle Reports."""
+    # Mode: "docker" or "native"
+    mode: str = "docker"
+
+    # Docker settings
+    docker: OracleDockerConfig = field(default_factory=OracleDockerConfig)
+
+    # Native settings
     home: str = ""
     connection: str = ""
     reports_server: str = "localhost:9002"
@@ -97,10 +127,20 @@ class Config:
         config = cls()
 
         if "extraction" in data:
-            config.extraction = ExtractionConfig(**data["extraction"])
+            extraction_data = data["extraction"].copy()
+            # Handle nested docker config
+            docker_data = extraction_data.pop("docker", {})
+            config.extraction = ExtractionConfig(**extraction_data)
+            if docker_data:
+                config.extraction.docker = ExtractionDockerConfig(**docker_data)
 
         if "oracle" in data:
-            config.oracle = OracleConfig(**data["oracle"])
+            oracle_data = data["oracle"].copy()
+            # Handle nested docker config
+            docker_data = oracle_data.pop("docker", {})
+            config.oracle = OracleConfig(**oracle_data)
+            if docker_data:
+                config.oracle.docker = OracleDockerConfig(**docker_data)
 
         if "paths" in data:
             config.paths = PathsConfig(**data["paths"])
@@ -151,19 +191,41 @@ class Config:
         """Validate configuration and return list of errors."""
         errors = []
 
-        # Check required Oracle configuration
-        if not self.oracle.home:
-            errors.append("Oracle home path (oracle.home) is required")
-        elif not Path(self.oracle.home).exists():
-            errors.append(f"Oracle home path does not exist: {self.oracle.home}")
+        # Validate Oracle configuration based on mode
+        if self.oracle.mode == "docker":
+            # Docker mode validation
+            if not self.oracle.docker.container:
+                errors.append("Docker container name (oracle.docker.container) is required")
+            if not self.oracle.docker.oracle_home:
+                errors.append("Oracle home in container (oracle.docker.oracle_home) is required")
+        elif self.oracle.mode == "native":
+            # Native mode validation
+            if not self.oracle.home:
+                errors.append("Oracle home path (oracle.home) is required for native mode")
+            elif not Path(self.oracle.home).exists():
+                errors.append(f"Oracle home path does not exist: {self.oracle.home}")
+            if not self.oracle.connection:
+                errors.append("Oracle connection string (oracle.connection) is required for native mode")
+        else:
+            errors.append(f"Invalid oracle.mode: {self.oracle.mode}. Must be 'docker' or 'native'")
 
-        if not self.oracle.connection:
-            errors.append("Oracle connection string (oracle.connection) is required")
-
-        # Check RptToXml path
-        rpttoxml_path = Path(self.extraction.rpttoxml_path)
-        if not rpttoxml_path.exists():
-            errors.append(f"RptToXml executable not found: {self.extraction.rpttoxml_path}")
+        # Validate extraction configuration based on mode
+        valid_extraction_modes = ["docker", "java", "dotnet"]
+        if self.extraction.mode not in valid_extraction_modes:
+            errors.append(
+                f"Invalid extraction.mode: {self.extraction.mode}. "
+                f"Must be one of: {valid_extraction_modes}"
+            )
+        elif self.extraction.mode == "docker":
+            # Docker mode - check that image is specified
+            if not self.extraction.docker.image:
+                errors.append("Docker image name (extraction.docker.image) is required")
+            # Note: We don't check if Docker/image exists here, that's done at runtime
+        else:
+            # Java or dotnet mode - check RptToXml path
+            rpttoxml_path = Path(self.extraction.rpttoxml_path)
+            if not rpttoxml_path.exists():
+                errors.append(f"RptToXml executable not found: {self.extraction.rpttoxml_path}")
 
         # Validate conversion options
         valid_unsupported_actions = ["placeholder", "skip", "fail"]

@@ -7,7 +7,18 @@
 # -------------------
 # Configuration for extracting Crystal Reports RPT files to XML
 extraction:
-  # Path to RptToXml executable or script
+  # Extraction mode: "docker", "java", or "dotnet"
+  # - docker: Use Docker container (recommended for macOS, works on all platforms)
+  # - java: Use Java SDK directly (requires Java 11+, works on Windows/Linux)
+  # - dotnet: Use .NET Edition (Windows only)
+  mode: "docker"
+
+  # Docker settings (used when mode: "docker")
+  docker:
+    # Docker image name for rpttoxml
+    image: "rpttoxml:latest"
+
+  # Path to RptToXml executable or script (used when mode: "java" or "dotnet")
   # Options:
   #   - Java Edition (cross-platform): "./tools/RptToXmlJava/rpttoxml.sh"
   #   - .NET Edition (Windows only): "./tools/RptToXml/RptToXml.exe"
@@ -17,7 +28,7 @@ extraction:
   temp_directory: "./temp"
 
   # Timeout for extracting a single RPT file (seconds)
-  timeout_seconds: 60
+  timeout_seconds: 120
 
   # Number of parallel workers for batch extraction
   parallel_workers: 4
@@ -28,7 +39,31 @@ extraction:
 # Oracle Reports Configuration
 # ----------------------------
 # Settings for Oracle Reports 12c environment
+#
+# Two modes are supported:
+#   1. Docker mode: Run Oracle Reports in a Docker container
+#   2. Native mode: Use a local or remote Oracle Reports installation
+#
 oracle:
+  # Conversion mode: "docker" or "native"
+  # - docker: Use Docker container for rwconverter (recommended for dev)
+  # - native: Use local Oracle Reports installation
+  mode: "docker"
+
+  # Docker settings (used when mode: "docker")
+  docker:
+    # Docker container name running Oracle Reports
+    container: "oracle-reports"
+    # Oracle home inside the container
+    oracle_home: "/u01/oracle/product/12c"
+    # Database host (usually the db container name)
+    db_host: "oracle-db"
+    # Database port
+    db_port: 1521
+    # Database service name
+    db_service: "XE"
+
+  # Native settings (used when mode: "native")
   # Oracle home directory (e.g., C:\Oracle\Middleware\Oracle_Home)
   # Can be overridden with ORACLE_HOME environment variable
   home: ""

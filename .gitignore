@@ -126,6 +126,17 @@ temp/
 *.rpt
 *.rdf
 
+# MDB export artifacts
+mdb_export/
+oracle_export/
+*.mdb
+*.accdb
+
+# Generated SQL files (keep examples)
+schema.sql
+inserts.sql
+*.ctl
+
 # RptToXml .NET build artifacts (keep source)
 tools/RptToXml/RptToXml/bin/
 tools/RptToXml/RptToXml/obj/
@@ -141,8 +152,17 @@ tools/RptToXmlJava/*.class
 !tools/RptToXmlJava/lib/
 !tools/RptToXmlJava/lib/*.jar
 
+# Docker build context - exclude SDK JARs (large files, user must provide)
+docker/rpttoxml/lib/*.jar
+
 # Keep empty directories
 !logs/.gitkeep
 !output/.gitkeep
 !input/.gitkeep
 !temp/.gitkeep
+
+# Conversion artifacts
+*.xml.bak
+conversion_report_*.html
+conversion_summary_*.csv
+conversion_details_*.json
