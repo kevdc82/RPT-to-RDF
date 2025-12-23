@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 from xml.dom import minidom
 
-from ..transformation.transformer import TransformedReport
+from ..transformation.transformer import TransformedReport, TransformedSubreport
 from ..transformation.layout_mapper import OracleLayout, OracleFrame, OracleField
 from ..transformation.formula_translator import TranslatedFormula
 from ..transformation.parameter_mapper import OracleParameter
@@ -57,6 +57,10 @@ class OracleXMLGenerator:
         # Generate parameter form
         if report.parameters:
             self._generate_parameter_form(root, report.parameters)
+
+        # Generate subreports section
+        if report.subreports:
+            self._generate_subreports(root, report.subreports)
 
         # Convert to string with pretty printing
         xml_string = self._prettify(root)
@@ -282,6 +286,130 @@ class OracleXMLGenerator:
                 })
                 lov_query = ET.SubElement(lov, "selectStatement")
                 lov_query.text = param.list_of_values
+
+    def _generate_subreports(
+        self,
+        root: ET.Element,
+        subreports: list[TransformedSubreport],
+    ) -> None:
+        """Generate subreport references.
+
+        Oracle Reports handles subreports differently than Crystal Reports.
+        This generates:
+        1. Comments documenting the subreport relationships
+        2. Placeholder frames where subreports should appear
+        3. PL/SQL procedure stubs for calling subreports via SRW.RUN_REPORT
+
+        Note: Full subreport implementation in Oracle requires:
+        - Converting each subreport to a separate RDF
+        - Using SRW.RUN_REPORT to call child reports
+        - Or restructuring as parent-child queries in the data model
+        """
+        if not subreports:
+            return
+
+        # Add comments documenting subreport structure
+        comment = ET.Comment(f" SUBREPORTS: {len(subreports)} subreport reference(s) ")
+        root.append(comment)
+
+        # Create a subreports section with documentation
+        sr_section = ET.SubElement(root, "subreports")
+
+        for sr in subreports:
+            # Add subreport reference element
+            sr_elem = ET.SubElement(sr_section, "subreport", {
+                "name": sr.oracle_name,
+                "originalName": sr.name,
+            })
+
+            # Add position info
+            ET.SubElement(sr_elem, "position", {
+                "x": str(int(sr.x)),
+                "y": str(int(sr.y)),
+                "width": str(int(sr.width)),
+                "height": str(int(sr.height)),
+            })
+
+            # Add parameter links
+            if sr.parameter_links:
+                links = ET.SubElement(sr_elem, "parameterLinks")
+                for parent_col, sr_param in sr.parameter_links:
+                    ET.SubElement(links, "link", {
+                        "parentColumn": parent_col,
+                        "subreportParameter": sr_param,
+                    })
+
+            # Add suppress trigger reference
+            if sr.suppress_trigger:
+                ET.SubElement(sr_elem, "suppressTrigger", {
+                    "function": sr.suppress_trigger,
+                })
+
+            # Add on-demand flag
+            if sr.on_demand:
+                sr_elem.set("onDemand", "yes")
+
+            # Add warnings as comments
+            for warning in sr.warnings:
+                warn_comment = ET.Comment(f" WARNING: {warning} ")
+                sr_elem.append(warn_comment)
+
+        # Generate a helper procedure for running subreports
+        self._generate_subreport_helper(root, subreports)
+
+    def _generate_subreport_helper(
+        self,
+        root: ET.Element,
+        subreports: list[TransformedSubreport],
+    ) -> None:
+        """Generate PL/SQL helper procedure for subreport calls."""
+        # Find or create program units section
+        program_units = root.find("programUnits")
+        if program_units is None:
+            program_units = ET.SubElement(root, "programUnits")
+
+        # Generate a helper procedure for each subreport
+        for sr in subreports:
+            proc = ET.SubElement(program_units, "procedure", {
+                "name": f"RUN_{sr.oracle_name}",
+            })
+
+            # Build parameter list
+            params = []
+            for parent_col, sr_param in sr.parameter_links:
+                params.append(f"p_{parent_col.lower()} IN VARCHAR2")
+
+            # Build SRW.RUN_REPORT call
+            param_string = ""
+            if sr.parameter_links:
+                param_assignments = []
+                for parent_col, sr_param in sr.parameter_links:
+                    param_assignments.append(f"'{sr_param}='||p_{parent_col.lower()}")
+                param_string = " || '&' || ".join(param_assignments)
+
+            # Generate the procedure code
+            plsql_code = f"""procedure RUN_{sr.oracle_name}({', '.join(params) if params else ''}) is
+  v_report_id   VARCHAR2(100);
+  v_report_name VARCHAR2(100) := '{sr.name}';
+begin
+  -- TODO: Update report path to point to converted RDF file
+  -- This is a template for calling a subreport using SRW.RUN_REPORT
+  /*
+  v_report_id := SRW.RUN_REPORT(
+    'report=' || v_report_name ||
+    {f"'&' || {param_string}" if param_string else "''"} ||
+    ' destype=cache'
+  );
+  */
+  NULL; -- Placeholder: implement subreport call
+end RUN_{sr.oracle_name};"""
+
+            source = ET.SubElement(proc, "textSource")
+            source.text = plsql_code
+
+            # Add comment about original subreport
+            comment = ET.SubElement(proc, "comment")
+            comment.text = f"Helper procedure for subreport: {sr.name}"
 
     def _map_datatype(self, oracle_type: str) -> str:
         """Map Oracle type to Oracle Reports datatype attribute.

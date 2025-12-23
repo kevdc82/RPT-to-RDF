@@ -11,19 +11,9 @@ This document tracks remaining work items and future enhancements for the Crysta
   - Validate generated RDF files can be opened in Oracle Reports Builder
   - Document any required XML adjustments
 
-### Formula Translation Improvements
-- [ ] **Add remaining Crystal function mappings**
-  - Complete CurrentDate, CurrentTime, Timer mappings
-  - Complete nested function handling (LEFT → SUBSTR)
-  - Handle WhilePrintingRecords formulas
-
 ## Medium Priority
 
 ### Enhanced Report Features
-- [ ] **Subreport handling**
-  - Extract and convert subreports
-  - Handle subreport parameters and linking
-  - Support nested subreports (up to 2 levels)
 
 - [ ] **Chart and graph support**
   - Extract chart definitions from Crystal Reports
@@ -141,6 +131,14 @@ This document tracks remaining work items and future enhancements for the Crysta
 - [x] Type hints added to modules
 - [x] Comprehensive unit test suite
 - [x] HTML preview generator
+
+### Phase 8: Formula & Subreport Enhancements ✅
+- [x] CurrentDate, CurrentTime, Timer keyword functions
+- [x] Nested function conversion (Left → SUBSTR inside Upper/Trim)
+- [x] WhilePrintingRecords directive handling
+- [x] Subreport transformation (TransformedSubreport model)
+- [x] Subreport XML generation with parameter links
+- [x] SRW.RUN_REPORT helper procedure stubs
 
 ---
 

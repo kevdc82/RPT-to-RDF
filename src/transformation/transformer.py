@@ -19,6 +19,42 @@ from ..utils.error_handler import ErrorHandler, ErrorCategory
 
 
 @dataclass
+class TransformedSubreport:
+    """Transformed subreport reference for Oracle Reports."""
+
+    name: str
+    oracle_name: str
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+    # Parameter links: [(parent_column, subreport_param)]
+    parameter_links: list[tuple[str, str]] = field(default_factory=list)
+    # Converted source file path (if subreport was also converted)
+    converted_file: Optional[str] = None
+    # Suppress condition (converted to Oracle PL/SQL if applicable)
+    suppress_trigger: Optional[str] = None
+    on_demand: bool = False
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "oracle_name": self.oracle_name,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "parameter_links": self.parameter_links,
+            "converted_file": self.converted_file,
+            "suppress_trigger": self.suppress_trigger,
+            "on_demand": self.on_demand,
+            "warnings": self.warnings,
+        }
+
+
+@dataclass
 class TransformedReport:
     """Result of transforming a Crystal report to Oracle format."""
 
@@ -32,6 +68,7 @@ class TransformedReport:
     formulas: list[TranslatedFormula] = field(default_factory=list)
     format_triggers: list[FormatTrigger] = field(default_factory=list)
     layout: Optional[OracleLayout] = None
+    subreports: list[TransformedSubreport] = field(default_factory=list)
 
     # Metadata
     success: bool = True
@@ -55,6 +92,7 @@ class TransformedReport:
             "formulas": [f.to_dict() for f in self.formulas],
             "format_triggers": [ft.to_dict() for ft in self.format_triggers],
             "layout": self.layout.to_dict() if self.layout else None,
+            "subreports": [sr.to_dict() for sr in self.subreports],
             "success": self.success,
             "warnings": self.warnings,
             "errors": self.errors,
@@ -179,6 +217,12 @@ class Transformer:
             result.layout, format_triggers = self._transform_layout(report, result)
             result.format_triggers = format_triggers
             stage_logger.end_stage(True)
+
+            # Stage 6: Transform subreports
+            if report.subreports:
+                stage_logger.start_stage("subreports", f"{len(report.subreports)} subreports")
+                result.subreports = self._transform_subreports(report, result)
+                stage_logger.end_stage(True)
 
             # Add conversion notes from original report
             result.conversion_notes.extend(report.conversion_notes)
@@ -349,3 +393,99 @@ class Transformer:
             result.warnings.append(f"Layout transformation: {e}")
             result.elements_with_issues += len(report.sections) + len(report.groups)
             return OracleLayout(), []  # Return empty layout and no triggers
+
+    def _transform_subreports(
+        self,
+        report: ReportModel,
+        result: TransformedReport,
+    ) -> list[TransformedSubreport]:
+        """Transform subreport references.
+
+        Crystal Reports subreports are embedded reports that appear within
+        the parent report. Oracle Reports handles subreports differently,
+        using either:
+        1. Child queries linked to parent groups
+        2. Separate RDF files called via SRW.RUN_REPORT
+
+        This method creates TransformedSubreport objects that can be
+        converted to either approach.
+        """
+        subreports = []
+
+        for sr in report.subreports:
+            try:
+                # Create Oracle-compatible name
+                oracle_name = self._make_oracle_subreport_name(sr.name)
+
+                # Convert parameter links
+                param_links = []
+                for parent_field, subreport_param in sr.links:
+                    # Clean up field names
+                    parent_col = parent_field.replace("{", "").replace("}", "")
+                    if "." in parent_col:
+                        parent_col = parent_col.split(".")[-1]
+                    parent_col = parent_col.upper().replace(" ", "_")
+
+                    subreport_col = subreport_param.upper().replace(" ", "_")
+                    param_links.append((parent_col, subreport_col))
+
+                # Convert suppress condition if present
+                suppress_trigger = None
+                warnings = []
+                if sr.suppress_condition:
+                    try:
+                        trigger = self.condition_mapper.convert_condition(
+                            sr.suppress_condition,
+                            f"SR_SUPPRESS_{oracle_name}",
+                            trigger_type="suppress",
+                        )
+                        suppress_trigger = trigger.name
+                        warnings.extend(trigger.warnings)
+                    except Exception as e:
+                        warnings.append(f"Could not convert suppress condition: {e}")
+
+                transformed = TransformedSubreport(
+                    name=sr.name,
+                    oracle_name=oracle_name,
+                    x=sr.x,
+                    y=sr.y,
+                    width=sr.width,
+                    height=sr.height,
+                    parameter_links=param_links,
+                    suppress_trigger=suppress_trigger,
+                    on_demand=sr.on_demand,
+                    warnings=warnings,
+                )
+
+                subreports.append(transformed)
+                result.elements_converted += 1
+
+                # Add notes about subreport handling
+                if sr.on_demand:
+                    result.conversion_notes.append(
+                        f"Subreport '{sr.name}' is on-demand - consider using SRW.RUN_REPORT"
+                    )
+                if len(param_links) > 0:
+                    result.conversion_notes.append(
+                        f"Subreport '{sr.name}' has {len(param_links)} parameter links - "
+                        "verify parent-child relationships in Oracle"
+                    )
+
+            except Exception as e:
+                result.warnings.append(f"Subreport '{sr.name}': {e}")
+                result.elements_with_issues += 1
+
+        return subreports
+
+    def _make_oracle_subreport_name(self, name: str) -> str:
+        """Create Oracle-compatible subreport name."""
+        import re
+        # Remove invalid characters
+        oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+        # Ensure starts with letter
+        if oracle_name and oracle_name[0].isdigit():
+            oracle_name = "SR_" + oracle_name
+        # Add prefix if not present
+        if not oracle_name.upper().startswith("SR_"):
+            oracle_name = "SR_" + oracle_name
+        return oracle_name.upper()

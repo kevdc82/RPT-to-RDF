@@ -256,6 +256,30 @@ class FormulaTranslator:
             else:
                 raise
 
+    # Crystal keywords that are zero-argument functions (appear without parentheses)
+    KEYWORD_FUNCTIONS = {
+        "currentdate": "TRUNC(SYSDATE)",
+        "currentdatetime": "SYSTIMESTAMP",
+        "currenttime": "TO_CHAR(SYSDATE, 'HH24:MI:SS')",
+        "now": "SYSDATE",
+        "today": "TRUNC(SYSDATE)",
+        "timer": "(SYSDATE - TRUNC(SYSDATE)) * 86400",
+        "printdate": "SYSDATE",
+        "printtime": "SYSDATE",
+        "pagenumber": "1",  # Placeholder - requires Oracle Reports variable
+        "totalpagecount": "1",  # Placeholder - requires Oracle Reports variable
+        "recordnumber": "ROWNUM",
+        "groupnumber": "1",  # Placeholder
+    }
+
+    # Crystal evaluation time directives (removed during translation)
+    EVALUATION_DIRECTIVES = [
+        "whileprintingrecords",
+        "whilereadingrecords",
+        "beforereadingrecords",
+        "evaluateafter",
+    ]
+
     def _translate_expression(self, expression: str) -> tuple[str, list[str]]:
         """Translate a Crystal expression to Oracle SQL/PL/SQL.
 
@@ -271,6 +295,10 @@ class FormulaTranslator:
         # Handle multi-line expressions
         result = result.replace("\r\n", "\n").replace("\r", "\n")
 
+        # Step 0: Remove evaluation time directives (WhilePrintingRecords, etc.)
+        result, directive_warnings = self._remove_evaluation_directives(result)
+        warnings.extend(directive_warnings)
+
         # Step 1: Convert field references {Table.Field} -> column names
         result = self._convert_field_references(result)
 
@@ -283,17 +311,65 @@ class FormulaTranslator:
         # Step 4: Convert string concatenation & -> ||
         result = self._convert_operators(result)
 
-        # Step 5: Convert function calls
+        # Step 5: Convert keyword functions (bare words like CurrentDate, Timer)
+        result = self._convert_keyword_functions(result)
+
+        # Step 6: Convert function calls with parentheses
         result, func_warnings = self._convert_functions(result)
         warnings.extend(func_warnings)
 
-        # Step 6: Convert IIF to CASE WHEN
+        # Step 7: Convert IIF to CASE WHEN
         result = self._convert_iif(result)
 
-        # Step 7: Clean up
+        # Step 8: Clean up
         result = self._cleanup_expression(result)
 
         return result, warnings
+
+    def _remove_evaluation_directives(self, expression: str) -> tuple[str, list[str]]:
+        """Remove Crystal evaluation time directives.
+
+        WhilePrintingRecords, WhileReadingRecords, BeforeReadingRecords, EvaluateAfter
+        are Crystal-specific timing directives that have no Oracle equivalent.
+        They are removed but noted in warnings.
+
+        Args:
+            expression: Crystal formula expression.
+
+        Returns:
+            Tuple of (cleaned expression, list of warnings).
+        """
+        warnings = []
+        result = expression
+
+        for directive in self.EVALUATION_DIRECTIVES:
+            # Match directive as a statement (possibly followed by semicolon or newline)
+            pattern = rf"\b{directive}\b\s*;?\s*"
+            if re.search(pattern, result, re.IGNORECASE):
+                warnings.append(
+                    f"Crystal directive '{directive}' removed - "
+                    "Oracle Reports handles evaluation timing differently"
+                )
+                result = re.sub(pattern, "", result, flags=re.IGNORECASE)
+
+        return result, warnings
+
+    def _convert_keyword_functions(self, expression: str) -> str:
+        """Convert Crystal keyword functions that appear without parentheses.
+
+        CurrentDate -> TRUNC(SYSDATE)
+        Timer -> (SYSDATE - TRUNC(SYSDATE)) * 86400
+        etc.
+        """
+        result = expression
+
+        for keyword, replacement in self.KEYWORD_FUNCTIONS.items():
+            # Match keyword as a whole word (not followed by parentheses)
+            # Use negative lookahead to avoid matching function calls
+            pattern = rf"\b{keyword}\b(?!\s*\()"
+            result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+        return result
 
     def _convert_field_references(self, expression: str) -> str:
         """Convert Crystal field references to Oracle column names.
@@ -372,58 +448,111 @@ class FormulaTranslator:
         return result
 
     def _convert_functions(self, expression: str) -> tuple[str, list[str]]:
-        """Convert Crystal function calls to Oracle equivalents."""
+        """Convert Crystal function calls to Oracle equivalents.
+
+        Handles nested function calls by processing from innermost to outermost.
+        """
         warnings = []
         result = expression
 
-        # Find all function calls: FunctionName(args)
-        pattern = r"\b(\w+)\s*\(([^)]*)\)"
+        # Iterate multiple times to handle nested functions (innermost first)
+        max_iterations = 20
+        for _ in range(max_iterations):
+            new_result = self._convert_functions_once(result, warnings)
+            if new_result == result:
+                break
+            result = new_result
 
-        def replace_function(match):
-            func_name = match.group(1).lower()
-            args_str = match.group(2)
-
-            # Special handling for DatePart
-            if func_name == "datepart":
-                return self._convert_datepart(args_str, warnings)
-
-            # Special handling for RunningTotal
-            if func_name == "runningtotal":
-                warnings.append("RunningTotal requires manual conversion - using SUM() OVER()")
-                return f"SUM({args_str}) OVER (ORDER BY ROWNUM)"
-
-            if func_name in self.FUNCTION_MAP:
-                template, expected_args = self.FUNCTION_MAP[func_name]
-
-                if template is None:
-                    # Special handling needed
-                    warnings.append(f"Function '{func_name}' requires manual conversion")
-                    return match.group(0)
-
-                if expected_args == 0:
-                    return template
-
-                # Parse arguments
-                args = self._parse_function_args(args_str)
-
-                if expected_args > 0 and len(args) != expected_args:
-                    warnings.append(
-                        f"Function '{func_name}' expected {expected_args} args, got {len(args)}"
-                    )
-
-                try:
-                    return template.format(*args)
-                except (IndexError, KeyError):
-                    warnings.append(f"Could not format function '{func_name}'")
-                    return match.group(0)
-
-            # Unknown function - pass through but warn
-            if func_name not in ["sum", "avg", "count", "max", "min"]:
-                warnings.append(f"Unknown function '{func_name}' - passed through")
-            return match.group(0)
-
-        result = re.sub(pattern, replace_function, result)
         return result, warnings
+
+    def _convert_functions_once(self, expression: str, warnings: list[str]) -> str:
+        """Convert function calls in a single pass.
+
+        Uses a more sophisticated approach to handle nested parentheses.
+        """
+        result = []
+        i = 0
+        n = len(expression)
+
+        while i < n:
+            # Look for function name followed by (
+            match = re.match(r'(\w+)\s*\(', expression[i:])
+            if match:
+                func_name = match.group(1)
+                func_start = i
+                paren_start = i + match.end() - 1  # Position of (
+
+                # Find the matching closing parenthesis
+                depth = 1
+                j = paren_start + 1
+                while j < n and depth > 0:
+                    if expression[j] == '(':
+                        depth += 1
+                    elif expression[j] == ')':
+                        depth -= 1
+                    j += 1
+
+                if depth == 0:
+                    # Found matching )
+                    args_str = expression[paren_start + 1:j - 1]
+                    converted = self._convert_single_function(func_name, args_str, warnings)
+                    result.append(converted)
+                    i = j
+                else:
+                    # No matching ), just append the character
+                    result.append(expression[i])
+                    i += 1
+            else:
+                result.append(expression[i])
+                i += 1
+
+        return ''.join(result)
+
+    def _convert_single_function(self, func_name: str, args_str: str, warnings: list[str]) -> str:
+        """Convert a single Crystal function call to Oracle equivalent."""
+        func_lower = func_name.lower()
+
+        # First, recursively convert any nested functions in the arguments
+        converted_args_str = self._convert_functions_once(args_str, warnings)
+
+        # Special handling for DatePart
+        if func_lower == "datepart":
+            return self._convert_datepart(converted_args_str, warnings)
+
+        # Special handling for RunningTotal
+        if func_lower == "runningtotal":
+            warnings.append("RunningTotal requires manual conversion - using SUM() OVER()")
+            return f"SUM({converted_args_str}) OVER (ORDER BY ROWNUM)"
+
+        if func_lower in self.FUNCTION_MAP:
+            template, expected_args = self.FUNCTION_MAP[func_lower]
+
+            if template is None:
+                # Special handling needed
+                warnings.append(f"Function '{func_name}' requires manual conversion")
+                return f"{func_name}({converted_args_str})"
+
+            if expected_args == 0:
+                return template
+
+            # Parse arguments from the converted args string
+            args = self._parse_function_args(converted_args_str)
+
+            if expected_args > 0 and len(args) != expected_args:
+                warnings.append(
+                    f"Function '{func_name}' expected {expected_args} args, got {len(args)}"
+                )
+
+            try:
+                return template.format(*args)
+            except (IndexError, KeyError):
+                warnings.append(f"Could not format function '{func_name}'")
+                return f"{func_name}({converted_args_str})"
+
+        # Unknown function - pass through but warn
+        if func_lower not in ["sum", "avg", "count", "max", "min", "case", "when", "then", "else", "end"]:
+            warnings.append(f"Unknown function '{func_name}' - passed through")
+        return f"{func_name}({converted_args_str})"
 
     def _convert_datepart(self, args_str: str, warnings: list[str]) -> str:
         """Convert DatePart function to appropriate Oracle function.
