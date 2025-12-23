@@ -2,10 +2,13 @@
 Pipeline Orchestration for RPT to RDF Converter.
 
 Coordinates the full conversion pipeline from RPT to RDF.
+Supports parallel processing for batch conversions.
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Callable, Optional
 
 from .config import Config, get_config
@@ -243,63 +246,141 @@ class Pipeline:
                 "input_dir": str(input_dir),
                 "output_dir": str(output_dir),
                 "workers": workers,
+                "parallel": workers > 1,
             },
         )
 
-        # Process files with progress tracking
-        with ConversionProgressTracker(len(rpt_files)) as progress:
-            for rpt_file in rpt_files:
-                # Calculate output path
-                output_path = get_output_path(
-                    rpt_file,
-                    input_dir,
-                    output_dir,
-                    new_extension=".rdf",
-                )
-
-                # Process file
-                result = self.process_file(rpt_file, output_path)
-
-                # Update progress
-                progress.update(result.status, rpt_file.name)
-
-                # Record result
-                if result.status == "success":
-                    report.successful += 1
-                    report.successful_files.append(str(rpt_file))
-                elif result.status == "partial":
-                    report.partial += 1
-                    report.partial_files.append(PartialConversion(
-                        file_name=str(rpt_file),
-                        rdf_path=str(result.rdf_path),
-                        warnings=[ConversionError(
-                            category=ErrorCategory.UNKNOWN_ERROR,
-                            message=w,
-                        ) for w in result.warnings],
-                        elements_converted=result.transformed_report.elements_converted if result.transformed_report else 0,
-                        elements_with_issues=result.transformed_report.elements_with_issues if result.transformed_report else 0,
-                        completion_percentage=result.transformed_report.completion_percentage if result.transformed_report else 0,
-                    ))
-                else:
-                    report.failed += 1
-                    report.failed_files.append(FailedConversion(
-                        file_name=str(rpt_file),
-                        errors=[ConversionError(
-                            category=ErrorCategory.UNKNOWN_ERROR,
-                            message=e,
-                            is_fatal=True,
-                        ) for e in result.errors],
-                        stage_failed=self._determine_failed_stage(result),
-                    ))
-
-                # Call progress callback
-                if progress_callback:
-                    progress_callback(result)
+        # Use parallel or sequential processing based on workers
+        if workers > 1:
+            self._process_parallel(
+                rpt_files, input_dir, output_dir, workers,
+                report, progress_callback
+            )
+        else:
+            self._process_sequential(
+                rpt_files, input_dir, output_dir,
+                report, progress_callback
+            )
 
         # Finalize report
         report.finalize()
 
         return report
+
+    def _process_sequential(
+        self,
+        rpt_files: list[Path],
+        input_dir: Path,
+        output_dir: Path,
+        report: ConversionReport,
+        progress_callback: Optional[Callable[[PipelineResult], None]],
+    ) -> None:
+        """Process files sequentially (single worker)."""
+        with ConversionProgressTracker(len(rpt_files)) as progress:
+            for rpt_file in rpt_files:
+                output_path = get_output_path(
+                    rpt_file, input_dir, output_dir, new_extension=".rdf"
+                )
+                result = self.process_file(rpt_file, output_path)
+                progress.update(result.status, rpt_file.name)
+                self._record_result(result, report)
+
+                if progress_callback:
+                    progress_callback(result)
+
+    def _process_parallel(
+        self,
+        rpt_files: list[Path],
+        input_dir: Path,
+        output_dir: Path,
+        workers: int,
+        report: ConversionReport,
+        progress_callback: Optional[Callable[[PipelineResult], None]],
+    ) -> None:
+        """Process files in parallel using thread pool."""
+        self.logger.info(f"Starting parallel processing with {workers} workers")
+
+        # Thread-safe lock for updating report
+        report_lock = Lock()
+
+        def process_single(rpt_file: Path) -> PipelineResult:
+            """Process a single file (runs in thread)."""
+            output_path = get_output_path(
+                rpt_file, input_dir, output_dir, new_extension=".rdf"
+            )
+            return self.process_file(rpt_file, output_path)
+
+        with ConversionProgressTracker(
+            len(rpt_files),
+            description=f"Converting ({workers} workers)"
+        ) as progress:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                # Submit all tasks
+                future_to_file = {
+                    executor.submit(process_single, rpt_file): rpt_file
+                    for rpt_file in rpt_files
+                }
+
+                # Process completed tasks as they finish
+                for future in as_completed(future_to_file):
+                    rpt_file = future_to_file[future]
+                    try:
+                        result = future.result()
+
+                        # Thread-safe update
+                        with report_lock:
+                            progress.update(result.status, rpt_file.name)
+                            self._record_result(result, report)
+
+                        if progress_callback:
+                            progress_callback(result)
+
+                    except Exception as e:
+                        # Handle unexpected errors in thread
+                        self.logger.error(f"Error processing {rpt_file}: {e}")
+                        error_result = PipelineResult(
+                            rpt_path=rpt_file,
+                            rdf_path=None,
+                            status="failed",
+                            errors=[f"Thread error: {str(e)}"],
+                        )
+
+                        with report_lock:
+                            progress.update("failed", rpt_file.name)
+                            self._record_result(error_result, report)
+
+                        if progress_callback:
+                            progress_callback(error_result)
+
+    def _record_result(self, result: PipelineResult, report: ConversionReport) -> None:
+        """Record a pipeline result in the conversion report."""
+        if result.status == "success":
+            report.successful += 1
+            report.successful_files.append(str(result.rpt_path))
+        elif result.status == "partial":
+            report.partial += 1
+            report.partial_files.append(PartialConversion(
+                file_name=str(result.rpt_path),
+                rdf_path=str(result.rdf_path) if result.rdf_path else "",
+                warnings=[ConversionError(
+                    category=ErrorCategory.UNKNOWN_ERROR,
+                    message=w,
+                ) for w in result.warnings],
+                elements_converted=result.transformed_report.elements_converted if result.transformed_report else 0,
+                elements_with_issues=result.transformed_report.elements_with_issues if result.transformed_report else 0,
+                completion_percentage=result.transformed_report.completion_percentage if result.transformed_report else 0,
+            ))
+        else:
+            report.failed += 1
+            report.failed_files.append(FailedConversion(
+                file_name=str(result.rpt_path),
+                errors=[ConversionError(
+                    category=ErrorCategory.UNKNOWN_ERROR,
+                    message=e,
+                    is_fatal=True,
+                ) for e in result.errors],
+                stage_failed=self._determine_failed_stage(result),
+            ))
 
     def _determine_failed_stage(self, result: PipelineResult) -> str:
         """Determine which stage failed based on result."""

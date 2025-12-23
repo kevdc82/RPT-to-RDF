@@ -13,7 +13,16 @@ from typing import Optional
 
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    MofNCompleteColumn,
+)
 
 
 # Module-level logger cache
@@ -106,17 +115,27 @@ def get_logger(name: str = "rpt_to_rdf") -> logging.Logger:
 
 
 class ConversionProgressTracker:
-    """Tracks and displays progress of batch conversion."""
+    """Tracks and displays progress of batch conversion with ETA."""
 
-    def __init__(self, total_files: int, description: str = "Converting reports"):
+    def __init__(
+        self,
+        total_files: int,
+        description: str = "Converting reports",
+        show_eta: bool = True,
+        show_rate: bool = True,
+    ):
         """Initialize the progress tracker.
 
         Args:
             total_files: Total number of files to process.
             description: Description text for the progress bar.
+            show_eta: Whether to show estimated time remaining.
+            show_rate: Whether to show processing rate.
         """
         self.total_files = total_files
         self.description = description
+        self.show_eta = show_eta
+        self.show_rate = show_rate
         self.console = get_console()
         self.progress: Optional[Progress] = None
         self.task_id = None
@@ -124,20 +143,39 @@ class ConversionProgressTracker:
         self.successful = 0
         self.partial = 0
         self.failed = 0
+        self.processed = 0
         self.start_time: Optional[datetime] = None
 
     def __enter__(self) -> "ConversionProgressTracker":
         """Enter context manager and start progress display."""
         self.start_time = datetime.now()
-        self.progress = Progress(
+
+        # Build progress columns
+        columns = [
             SpinnerColumn(),
             TextColumn("[bold blue]{task.description}"),
-            BarColumn(),
+            BarColumn(bar_width=40),
+            MofNCompleteColumn(),
             TaskProgressColumn(),
-            TextColumn("[green]{task.fields[successful]}[/] / "
-                       "[yellow]{task.fields[partial]}[/] / "
-                       "[red]{task.fields[failed]}[/]"),
+        ]
+
+        if self.show_eta:
+            columns.append(TimeRemainingColumn())
+
+        columns.extend([
+            TextColumn("•"),
+            TextColumn("[green]{task.fields[successful]} OK[/]"),
+            TextColumn("[yellow]{task.fields[partial]} partial[/]"),
+            TextColumn("[red]{task.fields[failed]} failed[/]"),
+        ])
+
+        if self.show_rate:
+            columns.append(TextColumn("({task.fields[rate]})"))
+
+        self.progress = Progress(
+            *columns,
             console=self.console,
+            refresh_per_second=2,
         )
         self.progress.__enter__()
         self.task_id = self.progress.add_task(
@@ -146,6 +184,7 @@ class ConversionProgressTracker:
             successful=0,
             partial=0,
             failed=0,
+            rate="-- files/min",
         )
         return self
 
@@ -157,13 +196,48 @@ class ConversionProgressTracker:
         # Display summary
         if self.start_time:
             elapsed = datetime.now() - self.start_time
+            elapsed_seconds = elapsed.total_seconds()
+
+            # Calculate rate
+            rate = (self.processed / elapsed_seconds * 60) if elapsed_seconds > 0 else 0
+
             self.console.print()
             self.console.print("[bold]Conversion Summary[/]")
-            self.console.print(f"  Total files: {self.total_files}")
-            self.console.print(f"  [green]Successful: {self.successful}[/]")
-            self.console.print(f"  [yellow]Partial: {self.partial}[/]")
-            self.console.print(f"  [red]Failed: {self.failed}[/]")
-            self.console.print(f"  Time elapsed: {elapsed}")
+            self.console.print(f"  Total files:   {self.total_files}")
+            self.console.print(f"  [green]Successful:    {self.successful}[/]")
+            self.console.print(f"  [yellow]Partial:       {self.partial}[/]")
+            self.console.print(f"  [red]Failed:        {self.failed}[/]")
+            self.console.print(f"  Time elapsed:  {self._format_duration(elapsed_seconds)}")
+            self.console.print(f"  Average rate:  {rate:.1f} files/min")
+
+            if self.processed > 0:
+                success_rate = (self.successful / self.processed) * 100
+                self.console.print(f"  Success rate:  {success_rate:.1f}%")
+
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration in human-readable format."""
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            secs = seconds % 60
+            return f"{minutes}m {secs:.0f}s"
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            return f"{hours}h {minutes}m"
+
+    def _calculate_rate(self) -> str:
+        """Calculate current processing rate."""
+        if not self.start_time or self.processed == 0:
+            return "-- files/min"
+
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        if elapsed < 1:
+            return "-- files/min"
+
+        rate = self.processed / elapsed * 60
+        return f"{rate:.1f} files/min"
 
     def update(
         self,
@@ -176,6 +250,8 @@ class ConversionProgressTracker:
             status: Result status - 'success', 'partial', or 'failed'.
             current_file: Name of the current file being processed.
         """
+        self.processed += 1
+
         if status == "success":
             self.successful += 1
         elif status == "partial":
@@ -186,6 +262,9 @@ class ConversionProgressTracker:
         if self.progress and self.task_id is not None:
             description = self.description
             if current_file:
+                # Truncate long filenames
+                if len(current_file) > 30:
+                    current_file = current_file[:27] + "..."
                 description = f"{self.description}: {current_file}"
 
             self.progress.update(
@@ -195,6 +274,7 @@ class ConversionProgressTracker:
                 successful=self.successful,
                 partial=self.partial,
                 failed=self.failed,
+                rate=self._calculate_rate(),
             )
 
 
