@@ -13,12 +13,6 @@ This document tracks remaining work items and future enhancements for the Crysta
 
 ## Medium Priority
 
-### Testing
-- [ ] **Validation framework**
-  - Compare Crystal and Oracle report output
-  - Visual PDF comparison
-  - Data output comparison (CSV)
-
 ## Low Priority
 
 ### Performance Optimization
@@ -146,6 +140,23 @@ This document tracks remaining work items and future enhancements for the Crysta
 - [x] Oracle Reports matrix layout generation
 - [x] PIVOT/DECODE query generation for cross-tab data
 - [x] Row/column totals and grand total support
+
+### Phase 11: Validation Framework ✅
+- [x] OutputValidator orchestrator class
+- [x] CSVComparator for data output comparison
+  - Row-by-position and key-based matching
+  - Numeric tolerance for floating-point comparison
+  - Date format normalization
+  - Case/whitespace insensitive options
+- [x] PDFComparator for visual output comparison
+  - Pixel-based comparison (via pdf2image + Pillow)
+  - Structural comparison (via pdftotext)
+  - Hash comparison fallback
+- [x] ComparisonReport with similarity scores
+- [x] Difference tracking with severity levels
+- [x] HTML validation report generation
+- [x] Batch validation support
+- [x] Comprehensive test suite (25 tests)
 
 ---
 
