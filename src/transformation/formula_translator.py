@@ -62,13 +62,16 @@ class FormulaTranslator:
         "instr": ("INSTR({0}, {1})", 2),
         "instrrev": ("INSTR({0}, {1}, -1)", 2),
         "replace": ("REPLACE({0}, {1}, {2})", 3),
-        "space": ("LPAD(' ', {0})", 1),
+        "space": ("RPAD(' ', {0})", 1),
         "replicate": ("RPAD({0}, LENGTH({0}) * {1}, {0})", 2),
+        "replicatestring": ("RPAD({0}, LENGTH({0}) * {1}, {0})", 2),
         "chr": ("CHR({0})", 1),
         "asc": ("ASCII({0})", 1),
         "val": ("TO_NUMBER({0})", 1),
         "str": ("TO_CHAR({0})", 1),
         "strreverse": ("REVERSE({0})", 1),
+        "strcmp": ("CASE WHEN {0} < {1} THEN -1 WHEN {0} > {1} THEN 1 ELSE 0 END", 2),
+        "propercase": ("INITCAP({0})", 1),
 
         # Date functions
         "currentdate": ("TRUNC(SYSDATE)", 0),
@@ -82,12 +85,14 @@ class FormulaTranslator:
         "minute": ("EXTRACT(MINUTE FROM CAST({0} AS TIMESTAMP))", 1),
         "second": ("EXTRACT(SECOND FROM CAST({0} AS TIMESTAMP))", 1),
         "dayofweek": ("TO_NUMBER(TO_CHAR({0}, 'D'))", 1),
-        "weekday": ("TO_NUMBER(TO_CHAR({0}, 'D'))", 1),
+        "weekday": ("TO_CHAR({0}, 'D')", 1),
+        "monthname": ("TO_CHAR({0}, 'Month')", 1),
         "dateserial": ("TO_DATE({0}||'-'||{1}||'-'||{2}, 'YYYY-MM-DD')", 3),
         "datevalue": ("TO_DATE({0}, 'YYYY-MM-DD')", 1),
         "timevalue": ("TO_DATE({0}, 'HH24:MI:SS')", 1),
         "now": ("SYSDATE", 0),
         "today": ("TRUNC(SYSDATE)", 0),
+        "timer": ("(SYSDATE - TRUNC(SYSDATE)) * 86400", 0),
 
         # Date arithmetic
         "dateadd": ("({1} + NUMTODSINTERVAL({2}, '{0}'))", 3),  # Special handling needed
@@ -97,13 +102,14 @@ class FormulaTranslator:
         "abs": ("ABS({0})", 1),
         "round": ("ROUND({0}, {1})", 2),
         "truncate": ("TRUNC({0}, {1})", 2),
-        "int": ("TRUNC({0})", 1),
+        "int": ("FLOOR({0})", 1),
         "fix": ("TRUNC({0})", 1),
         "mod": ("MOD({0}, {1})", 2),
         "remainder": ("REMAINDER({0}, {1})", 2),
         "sgn": ("SIGN({0})", 1),
         "sign": ("SIGN({0})", 1),
         "sqrt": ("SQRT({0})", 1),
+        "sqr": ("SQRT({0})", 1),
         "exp": ("EXP({0})", 1),
         "log": ("LN({0})", 1),
         "log10": ("LOG(10, {0})", 1),
@@ -142,9 +148,12 @@ class FormulaTranslator:
         # Aggregate functions (for reference in formulas)
         "sum": ("SUM({0})", 1),
         "avg": ("AVG({0})", 1),
+        "average": ("AVG({0})", 1),
         "count": ("COUNT({0})", 1),
         "max": ("MAX({0})", 1),
+        "maximum": ("MAX({0})", 1),
         "min": ("MIN({0})", 1),
+        "minimum": ("MIN({0})", 1),
         "distinctcount": ("COUNT(DISTINCT {0})", 1),
     }
 
@@ -374,6 +383,15 @@ class FormulaTranslator:
             func_name = match.group(1).lower()
             args_str = match.group(2)
 
+            # Special handling for DatePart
+            if func_name == "datepart":
+                return self._convert_datepart(args_str, warnings)
+
+            # Special handling for RunningTotal
+            if func_name == "runningtotal":
+                warnings.append("RunningTotal requires manual conversion - using SUM() OVER()")
+                return f"SUM({args_str}) OVER (ORDER BY ROWNUM)"
+
             if func_name in self.FUNCTION_MAP:
                 template, expected_args = self.FUNCTION_MAP[func_name]
 
@@ -406,6 +424,50 @@ class FormulaTranslator:
 
         result = re.sub(pattern, replace_function, result)
         return result, warnings
+
+    def _convert_datepart(self, args_str: str, warnings: list[str]) -> str:
+        """Convert DatePart function to appropriate Oracle function.
+
+        DatePart(interval, date) -> EXTRACT or TO_CHAR
+        """
+        args = self._parse_function_args(args_str)
+        if len(args) < 2:
+            warnings.append("DatePart requires 2 arguments")
+            return f"DatePart({args_str})"
+
+        # Remove quotes from interval if present
+        interval = args[0].strip().strip("'\"").lower()
+        date_expr = args[1].strip()
+
+        # Map Crystal intervals to Oracle
+        interval_map = {
+            "yyyy": f"EXTRACT(YEAR FROM {date_expr})",
+            "year": f"EXTRACT(YEAR FROM {date_expr})",
+            "q": f"TO_CHAR({date_expr}, 'Q')",
+            "quarter": f"TO_CHAR({date_expr}, 'Q')",
+            "m": f"EXTRACT(MONTH FROM {date_expr})",
+            "month": f"EXTRACT(MONTH FROM {date_expr})",
+            "d": f"EXTRACT(DAY FROM {date_expr})",
+            "day": f"EXTRACT(DAY FROM {date_expr})",
+            "y": f"TO_CHAR({date_expr}, 'DDD')",
+            "dayofyear": f"TO_CHAR({date_expr}, 'DDD')",
+            "w": f"TO_CHAR({date_expr}, 'IW')",
+            "week": f"TO_CHAR({date_expr}, 'IW')",
+            "ww": f"TO_CHAR({date_expr}, 'IW')",
+            "weekday": f"TO_CHAR({date_expr}, 'D')",
+            "h": f"EXTRACT(HOUR FROM CAST({date_expr} AS TIMESTAMP))",
+            "hour": f"EXTRACT(HOUR FROM CAST({date_expr} AS TIMESTAMP))",
+            "n": f"EXTRACT(MINUTE FROM CAST({date_expr} AS TIMESTAMP))",
+            "minute": f"EXTRACT(MINUTE FROM CAST({date_expr} AS TIMESTAMP))",
+            "s": f"EXTRACT(SECOND FROM CAST({date_expr} AS TIMESTAMP))",
+            "second": f"EXTRACT(SECOND FROM CAST({date_expr} AS TIMESTAMP))",
+        }
+
+        if interval in interval_map:
+            return interval_map[interval]
+        else:
+            warnings.append(f"Unknown DatePart interval '{interval}'")
+            return f"DatePart({args_str})"
 
     def _convert_iif(self, expression: str) -> str:
         """Convert nested IIF statements to CASE WHEN.

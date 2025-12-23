@@ -21,13 +21,16 @@ string_functions:
   InStr: "INSTR({0}, {1})"
   InStrRev: "INSTR({0}, {1}, -1)"
   Replace: "REPLACE({0}, {1}, {2})"
-  Space: "LPAD(' ', {0})"
+  Space: "RPAD(' ', {0})"
   Replicate: "RPAD({0}, LENGTH({0}) * {1}, {0})"
+  ReplicateString: "RPAD({0}, LENGTH({0}) * {1}, {0})"
   Chr: "CHR({0})"
   Asc: "ASCII({0})"
   Val: "TO_NUMBER({0})"
   Str: "TO_CHAR({0})"
   StrReverse: "REVERSE({0})"
+  StrCmp: "CASE WHEN {0} < {1} THEN -1 WHEN {0} > {1} THEN 1 ELSE 0 END"
+  ProperCase: "INITCAP({0})"
 
 date_functions:
   CurrentDate: "TRUNC(SYSDATE)"
@@ -41,12 +44,27 @@ date_functions:
   Minute: "EXTRACT(MINUTE FROM CAST({0} AS TIMESTAMP))"
   Second: "EXTRACT(SECOND FROM CAST({0} AS TIMESTAMP))"
   DayOfWeek: "TO_NUMBER(TO_CHAR({0}, 'D'))"
-  WeekDay: "TO_NUMBER(TO_CHAR({0}, 'D'))"
+  WeekDay: "TO_CHAR({0}, 'D')"
+  MonthName: "TO_CHAR({0}, 'Month')"
   DateSerial: "TO_DATE({0}||'-'||{1}||'-'||{2}, 'YYYY-MM-DD')"
   DateValue: "TO_DATE({0}, 'YYYY-MM-DD')"
   TimeValue: "TO_DATE({0}, 'HH24:MI:SS')"
   Now: "SYSDATE"
   Today: "TRUNC(SYSDATE)"
+  Timer: "(SYSDATE - TRUNC(SYSDATE)) * 86400"
+  DatePart:
+    note: "Special handling - interval type varies"
+    supported_intervals:
+      - "yyyy/year: EXTRACT(YEAR FROM date)"
+      - "q/quarter: TO_CHAR(date, 'Q')"
+      - "m/month: EXTRACT(MONTH FROM date)"
+      - "d/day: EXTRACT(DAY FROM date)"
+      - "y/dayofyear: TO_CHAR(date, 'DDD')"
+      - "w/ww/week: TO_CHAR(date, 'IW')"
+      - "weekday: TO_CHAR(date, 'D')"
+      - "h/hour: EXTRACT(HOUR FROM CAST(date AS TIMESTAMP))"
+      - "n/minute: EXTRACT(MINUTE FROM CAST(date AS TIMESTAMP))"
+      - "s/second: EXTRACT(SECOND FROM CAST(date AS TIMESTAMP))"
 
 # Special handling required - interval types differ
 date_arithmetic:
@@ -61,13 +79,14 @@ numeric_functions:
   Abs: "ABS({0})"
   Round: "ROUND({0}, {1})"
   Truncate: "TRUNC({0}, {1})"
-  Int: "TRUNC({0})"
+  Int: "FLOOR({0})"
   Fix: "TRUNC({0})"
   Mod: "MOD({0}, {1})"
   Remainder: "REMAINDER({0}, {1})"
   Sgn: "SIGN({0})"
   Sign: "SIGN({0})"
   Sqrt: "SQRT({0})"
+  Sqr: "SQRT({0})"
   Exp: "EXP({0})"
   Log: "LN({0})"
   Log10: "LOG(10, {0})"
@@ -105,10 +124,19 @@ logical_functions:
 aggregate_functions:
   Sum: "SUM({0})"
   Avg: "AVG({0})"
+  Average: "AVG({0})"
   Count: "COUNT({0})"
   Max: "MAX({0})"
+  Maximum: "MAX({0})"
   Min: "MIN({0})"
+  Minimum: "MIN({0})"
   DistinctCount: "COUNT(DISTINCT {0})"
+
+running_totals:
+  RunningTotal:
+    note: "Requires manual specification of ORDER BY clause"
+    pattern: "SUM({0}) OVER (ORDER BY ROWNUM)"
+    example: "SUM(amount) OVER (ORDER BY transaction_date)"
 
 # Unsupported functions that require manual conversion
 unsupported:

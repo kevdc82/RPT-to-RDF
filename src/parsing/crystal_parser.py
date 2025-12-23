@@ -7,7 +7,7 @@ Parses the XML output from RptToXml and builds the internal ReportModel.
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 from .report_model import (
     ReportModel,
@@ -36,7 +36,7 @@ class CrystalParser:
     """Parses Crystal Reports XML to internal ReportModel."""
 
     # Mapping of Crystal section names to SectionType
-    SECTION_TYPE_MAP = {
+    SECTION_TYPE_MAP: Dict[str, SectionType] = {
         "reportheader": SectionType.REPORT_HEADER,
         "pageheader": SectionType.PAGE_HEADER,
         "groupheader": SectionType.GROUP_HEADER,
@@ -47,7 +47,7 @@ class CrystalParser:
     }
 
     # Mapping of Crystal data types to DataType
-    DATA_TYPE_MAP = {
+    DATA_TYPE_MAP: Dict[str, DataType] = {
         "string": DataType.STRING,
         "number": DataType.NUMBER,
         "currency": DataType.CURRENCY,
@@ -62,10 +62,22 @@ class CrystalParser:
         "double": DataType.NUMBER,
         "decimal": DataType.NUMBER,
         "text": DataType.STRING,
+        # XSD types from RptToXml-Java
+        "xsd:long": DataType.NUMBER,
+        "xsd:int": DataType.NUMBER,
+        "xsd:integer": DataType.NUMBER,
+        "xsd:double": DataType.NUMBER,
+        "xsd:decimal": DataType.NUMBER,
+        "xsd:string": DataType.STRING,
+        "xsd:date": DataType.DATE,
+        "xsd:datetime": DataType.DATETIME,
+        "xsd:boolean": DataType.BOOLEAN,
+        "persistentmemo": DataType.MEMO,
+        "transientmemo": DataType.MEMO,
     }
 
     # Mapping of connection type strings to ConnectionType
-    CONNECTION_TYPE_MAP = {
+    CONNECTION_TYPE_MAP: Dict[str, ConnectionType] = {
         "odbc": ConnectionType.ODBC,
         "ole db": ConnectionType.OLE_DB,
         "oledb": ConnectionType.OLE_DB,
@@ -76,7 +88,7 @@ class CrystalParser:
         "sqlserver": ConnectionType.SQL_SERVER,
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the parser."""
         self.logger = get_logger("crystal_parser")
         self.error_handler = ErrorHandler()
@@ -242,11 +254,13 @@ class CrystalParser:
 
         # Also check tables for their fields to build query columns
         for table_elem in root.findall(".//Table"):
-            table_name = table_elem.get("Name", "")
+            # Use alias if available, otherwise use name
+            table_name = table_elem.get("alias") or table_elem.get("Name") or table_elem.get("name") or ""
 
             for field_elem in table_elem.findall(".//Field"):
-                field_name = field_elem.get("Name", "")
-                field_type = field_elem.get("Type", "String").lower()
+                field_name = field_elem.get("Name", "") or field_elem.get("name", "")
+                # Try both Type and valueType attributes (different XML formats)
+                field_type = (field_elem.get("Type") or field_elem.get("valueType") or "String").lower()
 
                 col = QueryColumn(
                     name=field_name,
@@ -254,10 +268,13 @@ class CrystalParser:
                     data_type=self.DATA_TYPE_MAP.get(field_type, DataType.STRING),
                 )
 
-                if model.queries:
-                    model.queries[0].columns.append(col)
-                    if table_name not in model.queries[0].tables:
-                        model.queries[0].tables.append(table_name)
+                # Create a default query if none exists
+                if not model.queries:
+                    model.queries.append(Query(name="Q_1"))
+
+                model.queries[0].columns.append(col)
+                if table_name not in model.queries[0].tables:
+                    model.queries[0].tables.append(table_name)
 
     def _parse_formulas(self, root: ET.Element, model: ReportModel) -> None:
         """Parse Crystal Reports formulas."""
@@ -359,6 +376,16 @@ class CrystalParser:
 
     def _parse_sections(self, root: ET.Element, model: ReportModel) -> None:
         """Parse report sections and their fields."""
+        # First try the ReportDefinition/Areas structure from RptToXml-Java
+        areas_elem = root.find(".//Areas")
+        if areas_elem is not None:
+            for area_elem in areas_elem.findall(".//Area"):
+                area_kind = area_elem.get("kind", "").lower()
+                for section_elem in area_elem.findall(".//Section"):
+                    self._parse_single_section(section_elem, model, area_kind)
+            return
+
+        # Fallback to older structure
         sections_elem = root.find(".//Sections") or root.find(".//ReportSections")
 
         if sections_elem is None:
@@ -370,9 +397,9 @@ class CrystalParser:
         for section_elem in sections_elem.findall(".//Section"):
             self._parse_single_section(section_elem, model)
 
-    def _parse_single_section(self, section_elem: ET.Element, model: ReportModel) -> None:
+    def _parse_single_section(self, section_elem: ET.Element, model: ReportModel, area_kind: str = "") -> None:
         """Parse a single section element."""
-        section_type_str = section_elem.get("Type", "").lower()
+        section_type_str = section_elem.get("Type", "").lower() or area_kind
         section_type = self.SECTION_TYPE_MAP.get(section_type_str)
 
         if section_type is None:
@@ -386,10 +413,13 @@ class CrystalParser:
         if section_type is None:
             section_type = SectionType.DETAIL
 
+        # Parse height - check both 'Height' and 'height' attributes
+        height_str = section_elem.get("Height") or section_elem.get("height", "0")
+
         section = Section(
             name=section_elem.get("Name", f"Section_{len(model.sections) + 1}"),
             section_type=section_type,
-            height=self._parse_dimension(section_elem.get("Height", "0")),
+            height=self._parse_dimension(height_str),
             suppress=section_elem.get("Suppress", "false").lower() == "true",
             new_page_before=section_elem.get("NewPageBefore", "false").lower() == "true",
             new_page_after=section_elem.get("NewPageAfter", "false").lower() == "true",
@@ -402,12 +432,75 @@ class CrystalParser:
         if suppress_elem is not None and suppress_elem.text:
             section.suppress_condition = suppress_elem.text
 
-        # Parse fields in section
+        # Parse fields in section - check for both Field and ReportObject elements
         for field_elem in section_elem.findall(".//Field"):
             field = self._parse_field(field_elem)
             section.fields.append(field)
 
+        # Also parse ReportObject elements (from RptToXml-Java)
+        report_objects_elem = section_elem.find(".//ReportObjects")
+        if report_objects_elem is not None:
+            for obj_elem in report_objects_elem.findall(".//ReportObject"):
+                field = self._parse_report_object(obj_elem)
+                section.fields.append(field)
+
         model.sections.append(section)
+
+    def _parse_report_object(self, obj_elem: ET.Element) -> Field:
+        """Parse a ReportObject element (from RptToXml-Java).
+
+        RptToXml-Java uses attributes: left, top, width, height, dataSource, kind, name
+        """
+        # Get coordinates (lowercase attributes)
+        x = self._parse_dimension(obj_elem.get("left", "0"))
+        y = self._parse_dimension(obj_elem.get("top", "0"))
+        width = self._parse_dimension(obj_elem.get("width", "100"))
+        height = self._parse_dimension(obj_elem.get("height", "20"))
+
+        # Get source - could be from dataSource attribute or Text child element
+        source = obj_elem.get("dataSource", "")
+        if not source:
+            text_elem = obj_elem.find(".//Text")
+            if text_elem is not None and text_elem.text:
+                source = text_elem.text.strip()
+
+        field = Field(
+            name=obj_elem.get("name", ""),
+            source=source,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+        )
+
+        # Determine source type based on source format
+        source_lower = field.source.lower()
+        if source_lower.startswith("{@") or source_lower.startswith("@"):
+            field.source_type = "formula"
+        elif source_lower.startswith("{?") or source_lower.startswith("?"):
+            field.source_type = "parameter"
+        elif source_lower in ["pagenumber", "totalpages", "printdate", "printtime", "pagenofm"]:
+            field.source_type = "special"
+        elif field.source.startswith("{") and field.source.endswith("}"):
+            # Database field like {tablename.fieldname}
+            field.source_type = "database"
+        else:
+            # Text field or other
+            field.source_type = "text"
+
+        # Parse font if available
+        font_elem = obj_elem.find(".//Font")
+        if font_elem is not None:
+            field.font = FontSpec(
+                name=font_elem.get("Name", "Arial"),
+                size=int(font_elem.get("Size", "10")),
+                bold=font_elem.get("Bold", "false").lower() == "true",
+                italic=font_elem.get("Italic", "false").lower() == "true",
+                underline=font_elem.get("Underline", "false").lower() == "true",
+                color=font_elem.get("Color", "#000000"),
+            )
+
+        return field
 
     def _parse_field(self, field_elem: ET.Element) -> Field:
         """Parse a field element."""
@@ -502,13 +595,17 @@ class CrystalParser:
         return None
 
     def _parse_dimension(self, value: str) -> float:
-        """Parse a dimension value (may be in twips, convert to points)."""
+        """Parse a dimension value in twips (keep as twips for now).
+
+        Crystal Reports XML uses twips (1/1440 inch).
+        We store coordinates as twips in the ReportModel, and convert
+        to points/inches later in the layout mapper.
+        """
         if not value:
             return 0.0
         try:
-            # Assume twips (1/1440 inch), convert to points (1/72 inch)
-            twips = float(value)
-            return twips / 20.0  # 1 point = 20 twips
+            # Return value as twips (no conversion)
+            return float(value)
         except ValueError:
             return 0.0
 
@@ -522,7 +619,7 @@ class CrystalParser:
         except ValueError:
             return 0.5
 
-    def _extract_field_references(self, expression: str) -> list[str]:
+    def _extract_field_references(self, expression: str) -> List[str]:
         """Extract database field references from a formula.
 
         Crystal uses {Table.Field} syntax.
@@ -531,7 +628,7 @@ class CrystalParser:
         matches = re.findall(pattern, expression)
         return list(set(matches))
 
-    def _extract_formula_references(self, expression: str) -> list[str]:
+    def _extract_formula_references(self, expression: str) -> List[str]:
         """Extract formula references from a formula.
 
         Crystal uses @FormulaName or {@FormulaName} syntax.
@@ -544,7 +641,7 @@ class CrystalParser:
         matches = re.findall(pattern1, expression) + re.findall(pattern2, expression)
         return list(set(matches))
 
-    def _extract_parameter_references(self, expression: str) -> list[str]:
+    def _extract_parameter_references(self, expression: str) -> List[str]:
         """Extract parameter references from a formula.
 
         Crystal uses ?ParameterName or {?ParameterName} syntax.

@@ -4,13 +4,6 @@ This document tracks remaining work items and future enhancements for the Crysta
 
 ## High Priority
 
-### Data Model Generation (Critical)
-- [ ] **Populate `<data>` section in Oracle XML** - Currently generates empty `<data/>` section
-  - Extract SQL queries from Crystal Reports XML
-  - Convert Crystal database connections to Oracle connections
-  - Generate proper `<dataSource>` and `<group>` elements
-  - Map Crystal field references to Oracle column names
-
 ### Oracle Reports RDF Generation
 - [ ] **Test with actual Oracle Reports 12c installation**
   - Set up Oracle Reports 12c in Docker or VM
@@ -19,10 +12,9 @@ This document tracks remaining work items and future enhancements for the Crysta
   - Document any required XML adjustments
 
 ### Formula Translation Improvements
-- [ ] **Expand formula function mappings**
-  - Add more Crystal-to-PL/SQL function translations
-  - Handle nested IIF statements → CASE WHEN conversion
-  - Support running totals → Oracle analytic functions
+- [ ] **Add remaining Crystal function mappings**
+  - Complete CurrentDate, CurrentTime, Timer mappings
+  - Complete nested function handling (LEFT → SUBSTR)
   - Handle WhilePrintingRecords formulas
 
 ## Medium Priority
@@ -42,27 +34,7 @@ This document tracks remaining work items and future enhancements for the Crysta
   - Parse cross-tab structure from Crystal XML
   - Generate Oracle Reports matrix/cross-tab equivalent
 
-### Layout Improvements
-- [ ] **Precise coordinate conversion**
-  - Crystal uses twips (1/1440 inch)
-  - Oracle uses points or inches
-  - Implement accurate conversion: `oracle_points = crystal_twips / 20`
-
-- [ ] **Font mapping**
-  - Map Crystal font names to Oracle-compatible fonts
-  - Handle font size and style conversion
-
-- [ ] **Conditional formatting**
-  - Convert Crystal conditional formatting to Oracle format triggers
-  - Handle suppress conditions
-
 ### Testing
-- [ ] **Expand test suite**
-  - Add unit tests for formula translator
-  - Add integration tests for full pipeline
-  - Create test fixtures with various report types
-  - Add regression tests for edge cases
-
 - [ ] **Validation framework**
   - Compare Crystal and Oracle report output
   - Visual PDF comparison
@@ -88,10 +60,6 @@ This document tracks remaining work items and future enhancements for the Crysta
   - FAQ section
 
 ### Additional Features
-- [ ] **Report preview**
-  - Generate HTML preview of converted reports
-  - Show side-by-side comparison with original
-
 - [ ] **Conversion rules customization**
   - Allow users to define custom formula mappings
   - Support custom type mappings via config
@@ -105,10 +73,6 @@ This document tracks remaining work items and future enhancements for the Crysta
 ## Technical Debt
 
 ### Code Quality
-- [ ] **Type hints**
-  - Add complete type hints to all modules
-  - Configure mypy for strict type checking
-
 - [ ] **Error handling**
   - Improve error messages with actionable guidance
   - Add error codes for common failures
@@ -164,6 +128,19 @@ This document tracks remaining work items and future enhancements for the Crysta
 - [x] Docker documentation
 - [x] CLI help text
 - [x] TODO tracking
+
+### Phase 7: Enhanced Transformation ✅
+- [x] Populate `<data>` section in Oracle XML
+- [x] SQL query generation from table/field info
+- [x] DataSource, group, dataItem element creation
+- [x] Expanded formula function mappings (StrCmp, ProperCase, DatePart, Timer, etc.)
+- [x] Running totals → SUM() OVER() conversion
+- [x] Coordinate conversion (twips → points)
+- [x] Font mapping with YAML config
+- [x] Conditional formatting → format triggers
+- [x] Type hints added to modules
+- [x] Comprehensive unit test suite
+- [x] HTML preview generator
 
 ---
 

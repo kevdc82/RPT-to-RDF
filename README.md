@@ -28,6 +28,7 @@ A Python-based batch conversion tool for converting Crystal Reports 14 (.rpt) fi
 - **Error Handling**: Partial conversion with detailed logging
 - **Progress Tracking**: Rich console output with progress bars
 - **Reporting**: HTML, CSV, and JSON conversion reports
+- **HTML Preview**: Visual preview of converted reports without Oracle Reports
 
 ### Data Migration
 - **MDB Extraction**: Extract data from Microsoft Access databases
@@ -208,6 +209,9 @@ python -m src.main analyze <input>
 # Validate a converted RDF file
 python -m src.main validate <rdf_file>
 
+# Generate HTML preview of a converted report
+python -m src.main preview <xml_path> [options]
+
 # Check configuration
 python -m src.main check-config
 
@@ -245,6 +249,38 @@ python -m src.main convert ./input/ ./output/ --dry-run
 # Full conversion with 8 parallel workers
 python -m src.main convert ./input/ ./output/ --workers 8
 ```
+
+### Preview Command
+
+The preview command generates an HTML visualization of converted reports, allowing you to verify the layout and structure without running Oracle Reports.
+
+```bash
+# Generate preview from Crystal Reports XML
+python -m src.main preview ./temp/SportsTeams.xml
+
+# Generate preview from Oracle Reports XML
+python -m src.main preview ./output/SportsTeams.xml --from-xml
+
+# Specify custom output path
+python -m src.main preview ./temp/report.xml -o ./previews/report.html
+```
+
+#### Preview Features
+
+- **Visual Layout**: Shows report sections (header, detail, footer) with approximate positioning
+- **Field Display**: Database fields, formulas, and parameters with color-coded types
+- **Section Labels**: Clear indication of section types and heights
+- **Metadata**: Report complexity score, field counts, and page settings
+- **Hover Info**: Hover over fields to see their source names
+- **Warnings**: Displays unsupported features and conversion notes
+- **Print Ready**: CSS print styles for creating printable documentation
+
+#### Field Color Coding
+
+- **Blue**: Database fields `{Table.Column}`
+- **Orange**: Formula fields `@FormulaName`
+- **Green**: Parameter fields `?ParameterName`
+- **Gray**: Special fields (page numbers, dates, etc.)
 
 ## Docker-Based Extraction
 

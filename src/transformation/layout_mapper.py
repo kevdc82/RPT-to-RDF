@@ -16,6 +16,145 @@ from ..parsing.report_model import (
     FormatSpec,
 )
 from ..utils.logger import get_logger
+from .font_mapper import FontMapper
+
+
+class CoordinateConverter:
+    """Converts coordinates between different measurement units.
+
+    Crystal Reports uses twips (1/1440 inch).
+    Oracle Reports typically uses points (1/72 inch).
+
+    Conversion formulas:
+    - 1 inch = 1440 twips = 72 points = 2.54 cm
+    - points = twips / 20
+    - inches = twips / 1440
+    - cm = (twips / 1440) * 2.54
+    """
+
+    # Conversion constants
+    TWIPS_PER_INCH = 1440.0
+    POINTS_PER_INCH = 72.0
+    CM_PER_INCH = 2.54
+    TWIPS_PER_POINT = TWIPS_PER_INCH / POINTS_PER_INCH  # 20.0
+
+    @staticmethod
+    def twips_to_points(twips: float) -> float:
+        """Convert twips to points.
+
+        Args:
+            twips: Value in twips (1/1440 inch)
+
+        Returns:
+            Value in points (1/72 inch)
+        """
+        return twips / CoordinateConverter.TWIPS_PER_POINT
+
+    @staticmethod
+    def twips_to_inches(twips: float) -> float:
+        """Convert twips to inches.
+
+        Args:
+            twips: Value in twips (1/1440 inch)
+
+        Returns:
+            Value in inches
+        """
+        return twips / CoordinateConverter.TWIPS_PER_INCH
+
+    @staticmethod
+    def twips_to_cm(twips: float) -> float:
+        """Convert twips to centimeters.
+
+        Args:
+            twips: Value in twips (1/1440 inch)
+
+        Returns:
+            Value in centimeters
+        """
+        inches = twips / CoordinateConverter.TWIPS_PER_INCH
+        return inches * CoordinateConverter.CM_PER_INCH
+
+    @staticmethod
+    def points_to_twips(points: float) -> int:
+        """Convert points to twips.
+
+        Args:
+            points: Value in points (1/72 inch)
+
+        Returns:
+            Value in twips (1/1440 inch)
+        """
+        return int(points * CoordinateConverter.TWIPS_PER_POINT)
+
+    @staticmethod
+    def inches_to_twips(inches: float) -> int:
+        """Convert inches to twips.
+
+        Args:
+            inches: Value in inches
+
+        Returns:
+            Value in twips (1/1440 inch)
+        """
+        return int(inches * CoordinateConverter.TWIPS_PER_INCH)
+
+    @staticmethod
+    def cm_to_twips(cm: float) -> int:
+        """Convert centimeters to twips.
+
+        Args:
+            cm: Value in centimeters
+
+        Returns:
+            Value in twips (1/1440 inch)
+        """
+        inches = cm / CoordinateConverter.CM_PER_INCH
+        return int(inches * CoordinateConverter.TWIPS_PER_INCH)
+
+    @classmethod
+    def convert(cls, value: float, from_unit: str, to_unit: str) -> float:
+        """Convert a value from one unit to another.
+
+        Args:
+            value: Value to convert
+            from_unit: Source unit ('twips', 'points', 'inches', 'cm')
+            to_unit: Target unit ('twips', 'points', 'inches', 'cm')
+
+        Returns:
+            Converted value
+        """
+        # Normalize to lowercase
+        from_unit = from_unit.lower()
+        to_unit = to_unit.lower()
+
+        # If same unit, no conversion needed
+        if from_unit == to_unit:
+            return value
+
+        # First convert to inches as intermediate
+        if from_unit == "twips":
+            inches = cls.twips_to_inches(value)
+        elif from_unit == "points":
+            inches = value / cls.POINTS_PER_INCH
+        elif from_unit == "inches":
+            inches = value
+        elif from_unit == "cm":
+            inches = value / cls.CM_PER_INCH
+        else:
+            raise ValueError(f"Unknown source unit: {from_unit}")
+
+        # Then convert from inches to target unit
+        if to_unit == "twips":
+            return cls.inches_to_twips(inches)
+        elif to_unit == "points":
+            return inches * cls.POINTS_PER_INCH
+        elif to_unit == "inches":
+            return inches
+        elif to_unit == "cm":
+            return inches * cls.CM_PER_INCH
+        else:
+            raise ValueError(f"Unknown target unit: {to_unit}")
 
 
 @dataclass
@@ -173,6 +312,7 @@ class LayoutMapper:
         coordinate_unit: str = "points",
         default_font: str = "Arial",
         default_font_size: int = 10,
+        font_config_path: Optional[str] = None,
     ):
         """Initialize the layout mapper.
 
@@ -181,16 +321,28 @@ class LayoutMapper:
             coordinate_unit: Unit for coordinates ('points', 'inches', 'cm').
             default_font: Default font name.
             default_font_size: Default font size.
+            font_config_path: Optional path to font_mappings.yaml configuration.
         """
         self.field_prefix = field_prefix
         self.coordinate_unit = coordinate_unit
         self.default_font = default_font
         self.default_font_size = default_font_size
         self.logger = get_logger("layout_mapper")
+        self.converter = CoordinateConverter()
+
+        # Initialize font mapper
+        self.font_mapper = FontMapper(
+            config_path=font_config_path,
+            default_font=default_font,
+            default_size=default_font_size,
+        )
 
         # Frame counter for unique names
         self._frame_counter = 0
         self._field_counter = 0
+
+        # Storage for format triggers
+        self._format_triggers = []
 
     def map_layout(
         self,
@@ -198,6 +350,7 @@ class LayoutMapper:
         groups: list[Group],
         page_width: float = 612.0,
         page_height: float = 792.0,
+        condition_mapper: Optional[Any] = None,
     ) -> OracleLayout:
         """Map Crystal sections to Oracle layout.
 
@@ -206,15 +359,18 @@ class LayoutMapper:
             groups: List of report groups.
             page_width: Page width in points.
             page_height: Page height in points.
+            condition_mapper: Optional ConditionMapper for converting suppress conditions.
 
         Returns:
             OracleLayout with mapped frames and fields.
         """
         self.logger.info(f"Mapping layout: {len(sections)} sections, {len(groups)} groups")
 
-        # Reset counters
+        # Reset counters and triggers
         self._frame_counter = 0
         self._field_counter = 0
+        self._format_triggers = []
+        self._condition_mapper = condition_mapper
 
         layout = OracleLayout(
             page_width=page_width,
@@ -444,13 +600,18 @@ class LayoutMapper:
                 group_name = f"G{group_num}"
             frame_name = frame_name.replace("{group}", group_name)
 
+        # Convert section height from twips to target unit
+        converted_height = self.converter.convert(
+            section.height, "twips", self.coordinate_unit
+        )
+
         frame = OracleFrame(
             name=frame_name,
             frame_type=frame_type,
             x=0,
             y=0,
             width=width,
-            height=section.height,
+            height=converted_height,
             source_group=frame_name.replace("R_", "") if frame_type == "repeating" else None,
         )
 
@@ -489,14 +650,14 @@ class LayoutMapper:
                 source = source.split(".")[-1]
             source = source.upper().replace(" ", "_")
 
-        # Map font
-        font_style = "plain"
-        if crystal_field.font.bold and crystal_field.font.italic:
-            font_style = "bolditalic"
-        elif crystal_field.font.bold:
-            font_style = "bold"
-        elif crystal_field.font.italic:
-            font_style = "italic"
+        # Map font using FontMapper
+        font_info = self.font_mapper.get_font_info(
+            crystal_font=crystal_field.font.name,
+            crystal_size=crystal_field.font.size,
+            bold=crystal_field.font.bold,
+            italic=crystal_field.font.italic,
+            underline=crystal_field.font.underline,
+        )
 
         # Map alignment
         h_align = self.HALIGN_MAP.get(
@@ -508,54 +669,59 @@ class LayoutMapper:
             "top",
         )
 
+        # Convert coordinates from twips to target unit
+        converted_x = self.converter.convert(crystal_field.x, "twips", self.coordinate_unit)
+        converted_y = self.converter.convert(crystal_field.y, "twips", self.coordinate_unit)
+        converted_width = self.converter.convert(crystal_field.width, "twips", self.coordinate_unit)
+        converted_height = self.converter.convert(crystal_field.height, "twips", self.coordinate_unit)
+
+        # Handle suppress conditions and generate format triggers
+        format_trigger_name = None
+
+        if hasattr(self, '_condition_mapper') and self._condition_mapper:
+            # Check for explicit suppress condition
+            if crystal_field.suppress_condition:
+                trigger = self._condition_mapper.convert_suppress_condition(
+                    crystal_field.suppress_condition,
+                    field_name=name,
+                )
+                self._format_triggers.append(trigger)
+                format_trigger_name = trigger.name
+            # Check for suppress_if_zero or suppress_if_blank
+            elif crystal_field.format.suppress_if_zero or crystal_field.format.suppress_if_blank:
+                trigger = self._condition_mapper.convert_suppress_if_conditions(
+                    crystal_field.format,
+                    field_name=source,  # Use the actual field name for reference
+                )
+                if trigger:
+                    self._format_triggers.append(trigger)
+                    format_trigger_name = trigger.name
+
         return OracleField(
             name=name,
             source=source,
             source_type=source_type,
-            x=crystal_field.x,
-            y=crystal_field.y,
-            width=crystal_field.width,
-            height=crystal_field.height,
-            font_name=crystal_field.font.name or self.default_font,
-            font_size=crystal_field.font.size or self.default_font_size,
-            font_style=font_style,
+            x=converted_x,
+            y=converted_y,
+            width=converted_width,
+            height=converted_height,
+            font_name=font_info["oracle_font"],
+            font_size=font_info["oracle_size"],
+            font_style=font_info["oracle_style"],
             format_mask=crystal_field.format.format_string,
             horizontal_alignment=h_align,
             vertical_alignment=v_align,
             foreground_color=crystal_field.font.color or "black",
             background_color=crystal_field.background_color or "white",
             visible=crystal_field.suppress_condition is None,
+            format_trigger=format_trigger_name,
         )
 
-    def convert_coordinates(
-        self,
-        value: float,
-        from_unit: str = "twips",
-        to_unit: str = "points",
-    ) -> float:
-        """Convert between coordinate units.
+    def get_format_triggers(self) -> list:
+        """Get all format triggers generated during layout mapping.
 
-        Crystal Reports uses twips (1/1440 inch).
-        Oracle Reports uses points (1/72 inch) or inches.
+        Returns:
+            List of FormatTrigger objects.
         """
-        # First convert to inches
-        if from_unit == "twips":
-            inches = value / 1440.0
-        elif from_unit == "points":
-            inches = value / 72.0
-        elif from_unit == "cm":
-            inches = value / 2.54
-        else:
-            inches = value
+        return self._format_triggers if hasattr(self, '_format_triggers') else []
 
-        # Then convert to target unit
-        if to_unit == "points":
-            return inches * 72.0
-        elif to_unit == "twips":
-            return inches * 1440.0
-        elif to_unit == "cm":
-            return inches * 2.54
-        elif to_unit == "inches":
-            return inches
-        else:
-            return inches * 72.0  # Default to points

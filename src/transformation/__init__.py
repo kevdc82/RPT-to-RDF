@@ -6,6 +6,7 @@ from .type_mapper import TypeMapper
 from .layout_mapper import LayoutMapper, OracleFrame, OracleField
 from .parameter_mapper import ParameterMapper
 from .connection_mapper import ConnectionMapper
+from .font_mapper import FontMapper
 
 __all__ = [
     "Transformer",
@@ -18,4 +19,5 @@ __all__ = [
     "OracleField",
     "ParameterMapper",
     "ConnectionMapper",
+    "FontMapper",
 ]

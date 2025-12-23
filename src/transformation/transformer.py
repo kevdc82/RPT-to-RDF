@@ -13,6 +13,7 @@ from .formula_translator import FormulaTranslator, TranslatedFormula
 from .layout_mapper import LayoutMapper, OracleLayout
 from .parameter_mapper import ParameterMapper, OracleParameter
 from .connection_mapper import ConnectionMapper, OracleConnection
+from .condition_mapper import ConditionMapper, FormatTrigger
 from ..utils.logger import get_logger, StageLogger
 from ..utils.error_handler import ErrorHandler, ErrorCategory
 
@@ -29,6 +30,7 @@ class TransformedReport:
     queries: list[dict] = field(default_factory=list)
     parameters: list[OracleParameter] = field(default_factory=list)
     formulas: list[TranslatedFormula] = field(default_factory=list)
+    format_triggers: list[FormatTrigger] = field(default_factory=list)
     layout: Optional[OracleLayout] = None
 
     # Metadata
@@ -51,6 +53,7 @@ class TransformedReport:
             "queries": self.queries,
             "parameters": [p.to_dict() for p in self.parameters],
             "formulas": [f.to_dict() for f in self.formulas],
+            "format_triggers": [ft.to_dict() for ft in self.format_triggers],
             "layout": self.layout.to_dict() if self.layout else None,
             "success": self.success,
             "warnings": self.warnings,
@@ -114,6 +117,9 @@ class Transformer:
         self.connection_mapper = ConnectionMapper(
             connection_templates=connection_templates,
         )
+        self.condition_mapper = ConditionMapper(
+            trigger_prefix="FT_",
+        )
 
         self.logger = get_logger("transformer")
         self.error_handler = ErrorHandler()
@@ -170,7 +176,8 @@ class Transformer:
 
             # Stage 5: Transform layout
             stage_logger.start_stage("layout", f"{len(report.sections)} sections")
-            result.layout = self._transform_layout(report, result)
+            result.layout, format_triggers = self._transform_layout(report, result)
+            result.format_triggers = format_triggers
             stage_logger.end_stage(True)
 
             # Add conversion notes from original report
@@ -223,9 +230,28 @@ class Transformer:
 
         for query in report.queries:
             try:
+                # If the query has explicit SQL, use it
+                sql = query.sql
+
+                # Otherwise, generate SQL from tables and columns
+                if not sql and query.columns:
+                    # Build SELECT statement
+                    select_fields = []
+                    for col in query.columns:
+                        # Use table.field format if table is known
+                        if col.table_name:
+                            select_fields.append(f"{col.table_name}.{col.name}")
+                        else:
+                            select_fields.append(col.name)
+
+                    # Build FROM clause
+                    from_clause = ", ".join(query.tables) if query.tables else "DUAL"
+
+                    sql = f"SELECT {', '.join(select_fields)} FROM {from_clause}"
+
                 oracle_query = {
                     "name": query.name,
-                    "sql": query.sql,
+                    "sql": sql,
                     "columns": [
                         {
                             "name": col.name.upper().replace(" ", "_"),
@@ -293,8 +319,8 @@ class Transformer:
         self,
         report: ReportModel,
         result: TransformedReport,
-    ) -> OracleLayout:
-        """Transform report layout."""
+    ) -> tuple[OracleLayout, list[FormatTrigger]]:
+        """Transform report layout and generate format triggers."""
         try:
             # Get page dimensions from metadata
             page_width = 612.0  # 8.5 inches in points
@@ -308,14 +334,18 @@ class Transformer:
                 groups=report.groups,
                 page_width=page_width,
                 page_height=page_height,
+                condition_mapper=self.condition_mapper,
             )
+
+            # Collect format triggers from layout mapper
+            format_triggers = self.layout_mapper.get_format_triggers()
 
             # Count converted elements
             result.elements_converted += len(report.sections) + len(report.groups)
 
-            return layout
+            return layout, format_triggers
 
         except Exception as e:
             result.warnings.append(f"Layout transformation: {e}")
             result.elements_with_issues += len(report.sections) + len(report.groups)
-            return OracleLayout()  # Return empty layout
+            return OracleLayout(), []  # Return empty layout and no triggers

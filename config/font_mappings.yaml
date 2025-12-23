@@ -1,0 +1,68 @@
+# Font Mappings Configuration
+# Maps Crystal Reports fonts to Oracle Reports compatible fonts
+#
+# Oracle Reports supports these standard fonts:
+# - Arial (sans-serif)
+# - Helvetica (sans-serif)
+# - Times (serif)
+# - Courier (monospace)
+# - Symbol (special characters)
+#
+# Add custom mappings below to override or extend the default mappings.
+
+# Font mappings from Crystal Reports to Oracle Reports
+fonts:
+  # Standard fonts (exact matches)
+  Arial: Arial
+  Helvetica: Helvetica
+  Times: Times
+  "Times New Roman": Times
+  Courier: Courier
+  "Courier New": Courier
+  Symbol: Symbol
+
+  # Sans-serif fonts -> Helvetica or Arial
+  Verdana: Helvetica
+  Tahoma: Helvetica
+  Calibri: Helvetica
+  "Trebuchet MS": Helvetica
+  "Century Gothic": Helvetica
+  "Franklin Gothic Medium": Helvetica
+  "Lucida Sans Unicode": Helvetica
+  "MS Sans Serif": Helvetica
+  Impact: Helvetica
+  "Comic Sans MS": Helvetica
+
+  # Serif fonts -> Times
+  Georgia: Times
+  Garamond: Times
+  Cambria: Times
+  "Palatino Linotype": Times
+  "Book Antiqua": Times
+  "MS Serif": Times
+
+  # Monospace fonts -> Courier
+  Consolas: Courier
+  "Lucida Console": Courier
+  Monaco: Courier
+  "Courier New": Courier
+
+  # Special/Symbol fonts
+  Wingdings: Symbol
+  Webdings: Symbol
+
+  # Add your custom font mappings here:
+  # "My Custom Font": Arial
+
+# Default font to use when no mapping is found
+default_font: Arial
+
+# Default font size (in points)
+default_size: 10
+
+# Optional: Font size adjustments
+# Some fonts may need size adjustments when converting
+# Example:
+# size_adjustments:
+#   Verdana: 0.9  # Make Verdana 90% of original size
+#   Impact: 1.1   # Make Impact 110% of original size

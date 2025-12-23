@@ -18,6 +18,8 @@ from .utils.logger import setup_logger
 from .utils.file_utils import get_rpt_files
 from .utils.schema_extractor import SchemaExtractor
 from .utils.mdb_extractor import MDBExtractor, HAS_ACCESS_PARSER
+from .generation.html_preview import HTMLPreviewGenerator
+from .parsing.report_model import ReportModel
 
 
 console = Console()
@@ -379,6 +381,80 @@ def extract_schema(input_path, ddl, schema, output):
         console.print(f"[green]Schema output written to:[/] {output_path}")
     else:
         console.print(result)
+
+
+@cli.command()
+@click.argument("input_path", type=click.Path(exists=True))
+@click.option(
+    "--output", "-o",
+    default=None,
+    type=click.Path(),
+    help="Output HTML file path (default: input_name.html).",
+)
+@click.option(
+    "--from-xml",
+    is_flag=True,
+    help="Generate preview from Oracle XML instead of Crystal XML.",
+)
+def preview(input_path, output, from_xml):
+    """Generate HTML preview of a converted report.
+
+    INPUT_PATH can be a Crystal Reports XML file or an Oracle Reports XML file.
+
+    The preview shows the report layout, fields, sections, and styling
+    to help visually verify the conversion without running Oracle Reports.
+
+    \b
+    Examples:
+        rpt-to-rdf preview ./output/SportsTeams.xml
+        rpt-to-rdf preview ./output/SportsTeams.xml -o ./preview/report.html
+        rpt-to-rdf preview ./output/SportsTeams.xml --from-xml
+    """
+    setup_logger(name="rpt_to_rdf", level="INFO")
+
+    input_path = Path(input_path)
+
+    if not input_path.exists():
+        console.print(f"[red]File not found:[/] {input_path}")
+        sys.exit(1)
+
+    if input_path.suffix.lower() != ".xml":
+        console.print(f"[red]Error:[/] Input must be an XML file")
+        console.print(f"Expected .xml file, got: {input_path.suffix}")
+        sys.exit(1)
+
+    # Determine output path
+    if output:
+        output_path = Path(output)
+    else:
+        output_path = input_path.parent / f"{input_path.stem}_preview.html"
+
+    generator = HTMLPreviewGenerator()
+
+    try:
+        if from_xml:
+            # Generate preview from Oracle XML
+            generator.generate_from_xml(input_path, output_path)
+        else:
+            # Generate preview from Crystal XML via ReportModel
+            console.print("[yellow]Note:[/] Generating preview from Crystal XML")
+            console.print("[yellow]Use --from-xml for Oracle XML files.[/]")
+
+            # Parse the XML to get report model
+            from .parsing.crystal_parser import CrystalParser
+            parser = CrystalParser()
+            report = parser.parse_file(input_path)
+
+            generator.generate(report, output_path)
+
+        console.print(f"[green]Preview generated successfully:[/] {output_path}")
+        console.print(f"\nOpen in browser: file://{output_path.absolute()}")
+
+    except Exception as e:
+        console.print(f"[red]Failed to generate preview:[/] {e}")
+        import traceback
+        console.print(traceback.format_exc())
+        sys.exit(1)
 
 
 @cli.command("extract-mdb")
