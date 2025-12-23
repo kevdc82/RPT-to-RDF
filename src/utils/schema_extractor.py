@@ -5,15 +5,16 @@ Extracts database schema requirements from Crystal Reports XML files
 and generates Oracle DDL scripts for creating the required tables/views.
 """
 
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import dataclass, field
-import xml.etree.ElementTree as ET
 
 
 @dataclass
 class ColumnDefinition:
     """Definition of a database column."""
+
     name: str
     crystal_type: str
     oracle_type: str = ""
@@ -48,6 +49,7 @@ class ColumnDefinition:
 @dataclass
 class TableDefinition:
     """Definition of a database table/view."""
+
     name: str
     alias: str
     object_type: str  # "Table" or "View"
@@ -58,6 +60,7 @@ class TableDefinition:
 @dataclass
 class SchemaRequirements:
     """Complete schema requirements extracted from reports."""
+
     tables: Dict[str, TableDefinition] = field(default_factory=dict)
     reports_analyzed: List[str] = field(default_factory=list)
 
@@ -84,11 +87,13 @@ class SchemaRequirements:
 
         for table_name, table in sorted(self.tables.items()):
             # Determine if it's likely a view (name starts with vw_ or v_)
-            is_view = table_name.lower().startswith(('vw_', 'v_'))
+            is_view = table_name.lower().startswith(("vw_", "v_"))
 
             if is_view:
                 ddl_parts.append(f"-- View: {table_name}")
-                ddl_parts.append(f"-- (Create as table for testing, or as view with appropriate query)")
+                ddl_parts.append(
+                    f"-- (Create as table for testing, or as view with appropriate query)"
+                )
 
             ddl_parts.append(f"CREATE TABLE {prefix}{table_name} (")
 
@@ -114,7 +119,7 @@ class SchemaRequirements:
         lines.append("")
 
         for table_name, table in sorted(self.tables.items()):
-            is_view = table_name.lower().startswith(('vw_', 'v_'))
+            is_view = table_name.lower().startswith(("vw_", "v_"))
             obj_type = "VIEW" if is_view else "TABLE"
             lines.append(f"{obj_type}: {table_name}")
             lines.append(f"  Columns: {len(table.columns)}")
@@ -193,7 +198,9 @@ def main():
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python schema_extractor.py <xml_file_or_directory> [--ddl] [--schema SCHEMA_NAME]")
+        print(
+            "Usage: python schema_extractor.py <xml_file_or_directory> [--ddl] [--schema SCHEMA_NAME]"
+        )
         sys.exit(1)
 
     path = Path(sys.argv[1])

@@ -4,11 +4,11 @@ Connection Mapper for RPT to RDF Converter.
 Maps Crystal Reports database connections to Oracle connections.
 """
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
-import re
 
-from ..parsing.report_model import DataSource, ConnectionType
+from ..parsing.report_model import ConnectionType, DataSource
 
 
 @dataclass

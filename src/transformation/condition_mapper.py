@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..parsing.report_model import FormatSpec, FontSpec
+from ..parsing.report_model import FontSpec, FormatSpec
 from ..utils.logger import get_logger
 
 
@@ -95,9 +95,7 @@ class ConditionMapper:
             trigger_name = f"{self.trigger_prefix}SUPPRESS_{safe_name}"
 
         warnings = []
-        plsql_condition = self._convert_condition_expression(
-            crystal_condition, warnings
-        )
+        plsql_condition = self._convert_condition_expression(crystal_condition, warnings)
 
         # Generate PL/SQL function
         plsql_code = f"""function {trigger_name} return boolean is
@@ -188,9 +186,13 @@ end;"""
 
         expr = crystal_expr.strip()
 
-        # Remove Crystal formula delimiters if present
+        # Remove Crystal formula delimiters if the entire expression is wrapped
+        # Only strip if it's a single balanced brace pair (no other braces inside)
         if expr.startswith("{") and expr.endswith("}"):
-            expr = expr[1:-1].strip()
+            # Check if there are other braces inside - if so, these are field references
+            inner = expr[1:-1]
+            if "{" not in inner and "}" not in inner:
+                expr = inner.strip()
 
         # Convert field references from {table.field} to :FIELD
         expr = self._convert_field_references(expr)
@@ -212,12 +214,17 @@ end;"""
         Crystal: {table.field} or {field}
         Oracle: :FIELD
         """
-        # Match {table.field} or {field}
-        pattern = r"\{(?:[\w]+\.)?(\w+)\}"
+        # Match {table.field} or {field} - capture the field name after optional table prefix
+        pattern = r"\{([^}]+)\}"
 
         def replace_field(match):
-            field_name = match.group(1).upper()
-            return f":{field_name}"
+            field_content = match.group(1)
+            # If there's a table prefix (e.g., "orders.amount"), extract just the field
+            if "." in field_content:
+                field_name = field_content.split(".")[-1]
+            else:
+                field_name = field_content
+            return f":{field_name.upper()}"
 
         return re.sub(pattern, replace_field, expr)
 
@@ -253,9 +260,7 @@ end;"""
                 try:
                     return plsql_template.format(args)
                 except (IndexError, KeyError):
-                    warnings.append(
-                        f"Could not convert function {crystal_func}({args})"
-                    )
+                    warnings.append(f"Could not convert function {crystal_func}({args})")
                     return match.group(0)
 
             result = re.sub(pattern, replace_func, result, flags=re.IGNORECASE)
@@ -273,9 +278,7 @@ end;"""
 
         # Handle null checks
         expr = re.sub(r"\b(\w+)\s*=\s*null\b", r"\1 IS NULL", expr, flags=re.IGNORECASE)
-        expr = re.sub(
-            r"\b(\w+)\s*!=\s*null\b", r"\1 IS NOT NULL", expr, flags=re.IGNORECASE
-        )
+        expr = re.sub(r"\b(\w+)\s*!=\s*null\b", r"\1 IS NOT NULL", expr, flags=re.IGNORECASE)
 
         return expr
 

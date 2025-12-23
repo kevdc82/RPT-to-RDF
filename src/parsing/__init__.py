@@ -1,21 +1,21 @@
 """Parsing module - Parses Crystal XML into internal report model."""
 
+from .crystal_parser import CrystalParser
 from .report_model import (
-    ReportModel,
     DataSource,
-    Query,
-    QueryColumn,
-    Formula,
-    Parameter,
-    Section,
     Field,
-    Group,
-    SubreportReference,
-    ReportMetadata,
     FontSpec,
     FormatSpec,
+    Formula,
+    Group,
+    Parameter,
+    Query,
+    QueryColumn,
+    ReportMetadata,
+    ReportModel,
+    Section,
+    SubreportReference,
 )
-from .crystal_parser import CrystalParser
 
 __all__ = [
     "ReportModel",

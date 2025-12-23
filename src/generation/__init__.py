@@ -1,6 +1,6 @@
 """Generation module - Generates Oracle Reports XML and converts to RDF."""
 
 from .oracle_xml_generator import OracleXMLGenerator
-from .rdf_converter import RDFConverter, ConversionResult
+from .rdf_converter import ConversionResult, RDFConverter
 
 __all__ = ["OracleXMLGenerator", "RDFConverter", "ConversionResult"]

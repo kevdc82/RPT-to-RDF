@@ -17,12 +17,14 @@ from dotenv import load_dotenv
 @dataclass
 class ExtractionDockerConfig:
     """Configuration for Docker-based RPT extraction."""
+
     image: str = "rpttoxml:latest"
 
 
 @dataclass
 class ExtractionConfig:
     """Configuration for RPT extraction."""
+
     # Mode: "docker", "java", or "dotnet"
     mode: str = "docker"
 
@@ -40,6 +42,7 @@ class ExtractionConfig:
 @dataclass
 class OracleDockerConfig:
     """Configuration for Docker-based Oracle Reports."""
+
     container: str = "oracle-reports"
     oracle_home: str = "/u01/oracle/product/12c"
     db_host: str = "oracle-db"
@@ -50,6 +53,7 @@ class OracleDockerConfig:
 @dataclass
 class OracleConfig:
     """Configuration for Oracle Reports."""
+
     # Mode: "docker" or "native"
     mode: str = "docker"
 
@@ -65,6 +69,7 @@ class OracleConfig:
 @dataclass
 class PathsConfig:
     """Configuration for file paths."""
+
     input_directory: str = "./input"
     output_directory: str = "./output"
     log_directory: str = "./logs"
@@ -73,6 +78,7 @@ class PathsConfig:
 @dataclass
 class ConversionConfig:
     """Configuration for conversion behavior."""
+
     # What to do with unsupported features: placeholder, skip, fail
     on_unsupported_formula: str = "placeholder"
     on_complex_layout: str = "simplify"
@@ -92,6 +98,7 @@ class ConversionConfig:
 @dataclass
 class LoggingConfig:
     """Configuration for logging."""
+
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     file: str = "./logs/conversion.log"
@@ -102,6 +109,7 @@ class LoggingConfig:
 @dataclass
 class Config:
     """Main configuration container."""
+
     extraction: ExtractionConfig = field(default_factory=ExtractionConfig)
     oracle: OracleConfig = field(default_factory=OracleConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
@@ -205,7 +213,9 @@ class Config:
             elif not Path(self.oracle.home).exists():
                 errors.append(f"Oracle home path does not exist: {self.oracle.home}")
             if not self.oracle.connection:
-                errors.append("Oracle connection string (oracle.connection) is required for native mode")
+                errors.append(
+                    "Oracle connection string (oracle.connection) is required for native mode"
+                )
         else:
             errors.append(f"Invalid oracle.mode: {self.oracle.mode}. Must be 'docker' or 'native'")
 

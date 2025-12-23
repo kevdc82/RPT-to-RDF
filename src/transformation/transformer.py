@@ -8,14 +8,14 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..parsing.report_model import ReportModel
-from .type_mapper import TypeMapper
+from ..utils.error_handler import ErrorCategory, ErrorHandler
+from ..utils.logger import StageLogger, get_logger
+from .condition_mapper import ConditionMapper, FormatTrigger
+from .connection_mapper import ConnectionMapper, OracleConnection
 from .formula_translator import FormulaTranslator, TranslatedFormula
 from .layout_mapper import LayoutMapper, OracleLayout
-from .parameter_mapper import ParameterMapper, OracleParameter
-from .connection_mapper import ConnectionMapper, OracleConnection
-from .condition_mapper import ConditionMapper, FormatTrigger
-from ..utils.logger import get_logger, StageLogger
-from ..utils.error_handler import ErrorHandler, ErrorCategory
+from .parameter_mapper import OracleParameter, ParameterMapper
+from .type_mapper import TypeMapper
 
 
 @dataclass
@@ -584,6 +584,7 @@ class Transformer:
     def _make_oracle_subreport_name(self, name: str) -> str:
         """Create Oracle-compatible subreport name."""
         import re
+
         # Remove invalid characters
         oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
         # Ensure starts with letter
@@ -633,8 +634,7 @@ class Transformer:
 
                 # Map chart type
                 oracle_type = chart_type_map.get(
-                    chart.chart_type.value,
-                    "BAR_VERT_CLUST"  # Default to bar chart
+                    chart.chart_type.value, "BAR_VERT_CLUST"  # Default to bar chart
                 )
 
                 # Extract value columns from data series
@@ -704,6 +704,7 @@ class Transformer:
     def _make_oracle_chart_name(self, name: str) -> str:
         """Create Oracle-compatible chart name."""
         import re
+
         # Remove invalid characters
         oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
         # Ensure starts with letter
@@ -765,12 +766,14 @@ class Transformer:
                     if "." in col_name:
                         col_name = col_name.split(".")[-1]
 
-                    summary_columns.append({
-                        "name": cell.name,
-                        "column": col_name.upper(),
-                        "function": summary_map.get(cell.summary_type, "SUM"),
-                        "format": cell.format_string,
-                    })
+                    summary_columns.append(
+                        {
+                            "name": cell.name,
+                            "column": col_name.upper(),
+                            "function": summary_map.get(cell.summary_type, "SUM"),
+                            "format": cell.format_string,
+                        }
+                    )
 
                 warnings = [
                     "Cross-tab requires Oracle Reports matrix layout - manual implementation required"
@@ -810,6 +813,7 @@ class Transformer:
     def _make_oracle_crosstab_name(self, name: str) -> str:
         """Create Oracle-compatible cross-tab name."""
         import re
+
         # Remove invalid characters
         oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
         # Ensure starts with letter

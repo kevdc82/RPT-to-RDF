@@ -12,15 +12,14 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from .config import load_config, Config
-from .pipeline import Pipeline
-from .utils.logger import setup_logger
-from .utils.file_utils import get_rpt_files
-from .utils.schema_extractor import SchemaExtractor
-from .utils.mdb_extractor import MDBExtractor, HAS_ACCESS_PARSER
+from .config import Config, load_config
 from .generation.html_preview import HTMLPreviewGenerator
 from .parsing.report_model import ReportModel
-
+from .pipeline import Pipeline
+from .utils.file_utils import get_rpt_files
+from .utils.logger import setup_logger
+from .utils.mdb_extractor import HAS_ACCESS_PARSER, MDBExtractor
+from .utils.schema_extractor import SchemaExtractor
 
 console = Console()
 
@@ -39,18 +38,21 @@ def cli():
 @click.argument("input_path", type=click.Path(exists=True))
 @click.argument("output_path", type=click.Path())
 @click.option(
-    "--config", "-c",
+    "--config",
+    "-c",
     default="config/settings.yaml",
     help="Path to configuration file.",
 )
 @click.option(
-    "--workers", "-w",
+    "--workers",
+    "-w",
     default=4,
     type=int,
     help="Number of parallel workers for batch processing.",
 )
 @click.option(
-    "--recursive/--no-recursive", "-r",
+    "--recursive/--no-recursive",
+    "-r",
     default=True,
     help="Recursively process subdirectories.",
 )
@@ -70,7 +72,8 @@ def cli():
     help="Skip RDF conversion (output Oracle XML instead of binary RDF).",
 )
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     help="Enable verbose output.",
 )
@@ -158,9 +161,7 @@ def convert(input_path, output_path, config, workers, recursive, dry_run, mock, 
         _display_summary(report)
 
         # Save reports
-        html_path, csv_path, json_path = report.save_reports(
-            str(Path(cfg.paths.log_directory))
-        )
+        html_path, csv_path, json_path = report.save_reports(str(Path(cfg.paths.log_directory)))
         console.print(f"\n[bold]Reports saved:[/]")
         console.print(f"  HTML: {html_path}")
         console.print(f"  CSV:  {csv_path}")
@@ -174,7 +175,8 @@ def convert(input_path, output_path, config, workers, recursive, dry_run, mock, 
 @cli.command()
 @click.argument("input_path", type=click.Path(exists=True))
 @click.option(
-    "--recursive/--no-recursive", "-r",
+    "--recursive/--no-recursive",
+    "-r",
     default=True,
     help="Recursively analyze subdirectories.",
 )
@@ -247,7 +249,8 @@ def validate(report_file):
 
 @cli.command()
 @click.option(
-    "--config", "-c",
+    "--config",
+    "-c",
     default="config/settings.yaml",
     help="Path to configuration file.",
 )
@@ -286,17 +289,27 @@ def check_config(config):
         # Docker mode settings
         table.add_row("Docker Container", cfg.oracle.docker.container, "[cyan]Docker[/]")
         table.add_row("Docker Oracle Home", cfg.oracle.docker.oracle_home, "[cyan]Docker[/]")
-        table.add_row("Docker DB Host", f"{cfg.oracle.docker.db_host}:{cfg.oracle.docker.db_port}", "[cyan]Docker[/]")
+        table.add_row(
+            "Docker DB Host",
+            f"{cfg.oracle.docker.db_host}:{cfg.oracle.docker.db_port}",
+            "[cyan]Docker[/]",
+        )
         table.add_row("Docker DB Service", cfg.oracle.docker.db_service, "[cyan]Docker[/]")
     else:
         # Native mode settings
-        oracle_status = "[green]OK[/]" if cfg.oracle.home and Path(cfg.oracle.home).exists() else "[red]Missing[/]"
+        oracle_status = (
+            "[green]OK[/]"
+            if cfg.oracle.home and Path(cfg.oracle.home).exists()
+            else "[red]Missing[/]"
+        )
         table.add_row("Oracle Home", cfg.oracle.home or "(not set)", oracle_status)
         conn_status = "[green]OK[/]" if cfg.oracle.connection else "[red]Missing[/]"
         table.add_row("Oracle Connection", cfg.oracle.connection or "(not set)", conn_status)
 
     # RptToXml
-    rpt_status = "[green]OK[/]" if Path(cfg.extraction.rpttoxml_path).exists() else "[yellow]Not found[/]"
+    rpt_status = (
+        "[green]OK[/]" if Path(cfg.extraction.rpttoxml_path).exists() else "[yellow]Not found[/]"
+    )
     table.add_row("RptToXml Path", cfg.extraction.rpttoxml_path, rpt_status)
 
     # Directories
@@ -326,12 +339,14 @@ def check_config(config):
     help="Generate Oracle DDL statements instead of summary.",
 )
 @click.option(
-    "--schema", "-s",
+    "--schema",
+    "-s",
     default=None,
     help="Schema name to prefix table names (e.g., REPORTS).",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     default=None,
     type=click.Path(),
     help="Output file path (default: stdout).",
@@ -386,7 +401,8 @@ def extract_schema(input_path, ddl, schema, output):
 @cli.command()
 @click.argument("input_path", type=click.Path(exists=True))
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     default=None,
     type=click.Path(),
     help="Output HTML file path (default: input_name.html).",
@@ -442,6 +458,7 @@ def preview(input_path, output, from_xml):
 
             # Parse the XML to get report model
             from .parsing.crystal_parser import CrystalParser
+
             parser = CrystalParser()
             report = parser.parse_file(input_path)
 
@@ -453,6 +470,7 @@ def preview(input_path, output, from_xml):
     except Exception as e:
         console.print(f"[red]Failed to generate preview:[/] {e}")
         import traceback
+
         console.print(traceback.format_exc())
         sys.exit(1)
 
@@ -460,23 +478,27 @@ def preview(input_path, output, from_xml):
 @cli.command("extract-mdb")
 @click.argument("mdb_path", type=click.Path(exists=True))
 @click.option(
-    "--mode", "-m",
+    "--mode",
+    "-m",
     type=click.Choice(["summary", "ddl", "inserts", "csv", "sqlldr", "all"]),
     default="summary",
     help="Extraction mode.",
 )
 @click.option(
-    "--table", "-t",
+    "--table",
+    "-t",
     default=None,
     help="Specific table to extract (for inserts/csv/sqlldr modes).",
 )
 @click.option(
-    "--schema", "-s",
+    "--schema",
+    "-s",
     default=None,
     help="Oracle schema name to prefix table names.",
 )
 @click.option(
-    "--output", "-o",
+    "--output",
+    "-o",
     default=None,
     type=click.Path(),
     help="Output file or directory path.",
@@ -597,9 +619,7 @@ def extract_mdb(mdb_path, mode, table, schema, output):
             # SQL*Loader control file
             ctl_path = ctl_dir / f"{tbl_name}.ctl"
             ctl_content = extractor.generate_sqlldr_control(
-                tbl_name,
-                schema_name=schema,
-                data_file=f"../data/{tbl_name}.csv"
+                tbl_name, schema_name=schema, data_file=f"../data/{tbl_name}.csv"
             )
             ctl_path.write_text(ctl_content)
 
@@ -637,9 +657,15 @@ def _display_analysis(analysis):
     table.add_column("Count", style="white", justify="right")
 
     table.add_row("Total Files", str(analysis["total_files"]))
-    table.add_row("[green]Simple (score 1-3)[/]", str(analysis["complexity_distribution"]["simple"]))
-    table.add_row("[yellow]Medium (score 4-6)[/]", str(analysis["complexity_distribution"]["medium"]))
-    table.add_row("[red]Complex (score 7-10)[/]", str(analysis["complexity_distribution"]["complex"]))
+    table.add_row(
+        "[green]Simple (score 1-3)[/]", str(analysis["complexity_distribution"]["simple"])
+    )
+    table.add_row(
+        "[yellow]Medium (score 4-6)[/]", str(analysis["complexity_distribution"]["medium"])
+    )
+    table.add_row(
+        "[red]Complex (score 7-10)[/]", str(analysis["complexity_distribution"]["complex"])
+    )
 
     console.print(table)
 
@@ -661,11 +687,7 @@ def _display_analysis(analysis):
 
         for file_info in analysis["files"][:20]:
             score = file_info["complexity_score"]
-            score_style = (
-                "green" if score <= 3
-                else "yellow" if score <= 6
-                else "red"
-            )
+            score_style = "green" if score <= 3 else "yellow" if score <= 6 else "red"
             file_table.add_row(
                 file_info["name"],
                 f"[{score_style}]{score}[/]",

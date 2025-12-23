@@ -13,6 +13,7 @@ from ..parsing.report_model import DataType
 @dataclass
 class OracleType:
     """Oracle data type specification."""
+
     name: str
     length: Optional[int] = None
     precision: Optional[int] = None
@@ -20,7 +21,7 @@ class OracleType:
 
     def __str__(self) -> str:
         """Return the Oracle type declaration."""
-        if self.length:
+        if self.length is not None:
             return f"{self.name}({self.length})"
         elif self.precision is not None:
             if self.scale is not None:
@@ -56,12 +57,10 @@ class TypeMapper:
         "#,##0.00;(#,##0.00)": "999,999,999,990.00PR",  # Negative in parentheses
         "0%": "990%",
         "0.00%": "990.00%",
-
         # Currency formats
         "$#,##0": "$999,999,999,990",
         "$#,##0.00": "$999,999,999,990.00",
         "$#,##0.00;($#,##0.00)": "$999,999,999,990.00PR",
-
         # Date formats
         "MM/dd/yyyy": "MM/DD/YYYY",
         "dd/MM/yyyy": "DD/MM/YYYY",
@@ -69,13 +68,11 @@ class TypeMapper:
         "MMMM d, yyyy": "MONTH DD, YYYY",
         "MMM d, yyyy": "MON DD, YYYY",
         "M/d/yy": "MM/DD/YY",
-
         # Time formats
         "h:mm:ss tt": "HH:MI:SS AM",
         "HH:mm:ss": "HH24:MI:SS",
         "h:mm tt": "HH:MI AM",
         "HH:mm": "HH24:MI",
-
         # DateTime formats
         "MM/dd/yyyy h:mm:ss tt": "MM/DD/YYYY HH:MI:SS AM",
         "yyyy-MM-dd HH:mm:ss": "YYYY-MM-DD HH24:MI:SS",
@@ -149,7 +146,7 @@ class TypeMapper:
             crystal_format: Crystal Reports format string.
 
         Returns:
-            Oracle format string, or None if no mapping exists.
+            Oracle format string, or the original format if partially converted.
         """
         if not crystal_format:
             return None
@@ -167,7 +164,6 @@ class TypeMapper:
             ("yy", "YY"),
             ("MMMM", "MONTH"),
             ("MMM", "MON"),
-            ("MM", "MM"),
             ("dd", "DD"),
             ("d", "D"),
         ]
@@ -184,7 +180,8 @@ class TypeMapper:
         for crystal_part, oracle_part in date_replacements + time_replacements:
             oracle_format = oracle_format.replace(crystal_part, oracle_part)
 
-        return oracle_format if oracle_format != crystal_format else None
+        # Return the converted format (may be same as input if no changes made)
+        return oracle_format
 
     def get_default_value(
         self,

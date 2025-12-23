@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from src.utils.output_comparator import (
-    CSVComparator,
     ComparisonResult,
+    CSVComparator,
     DifferenceType,
     OutputValidator,
     PDFComparator,
@@ -404,11 +404,13 @@ class TestOutputValidator:
         for i in range(3):
             crystal = self._create_csv(f"crystal_{i}.csv", headers, [[str(i), "100"]])
             oracle = self._create_csv(f"oracle_{i}.csv", headers, [[str(i), "100"]])
-            validations.append({
-                "name": f"Report_{i}",
-                "crystal_csv": str(crystal),
-                "oracle_csv": str(oracle),
-            })
+            validations.append(
+                {
+                    "name": f"Report_{i}",
+                    "crystal_csv": str(crystal),
+                    "oracle_csv": str(oracle),
+                }
+            )
 
         output_dir = Path(self.temp_dir) / "batch_reports"
         results = self.validator.batch_validate(validations, output_dir)

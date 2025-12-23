@@ -8,15 +8,16 @@ Extracts data from Microsoft Access MDB files and generates:
 - CSV exports
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
-from datetime import datetime, date
 import csv
 import re
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from access_parser import AccessParser
+
     HAS_ACCESS_PARSER = True
 except ImportError:
     HAS_ACCESS_PARSER = False
@@ -25,6 +26,7 @@ except ImportError:
 @dataclass
 class ColumnInfo:
     """Information about a database column."""
+
     name: str
     python_type: type
     oracle_type: str = ""
@@ -61,6 +63,7 @@ class ColumnInfo:
 @dataclass
 class TableInfo:
     """Information about a database table."""
+
     name: str
     columns: List[ColumnInfo] = field(default_factory=list)
     row_count: int = 0
@@ -70,23 +73,21 @@ class TableInfo:
 @dataclass
 class MDBSchema:
     """Schema information extracted from an MDB file."""
+
     source_file: str
     tables: Dict[str, TableInfo] = field(default_factory=dict)
     extraction_time: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def get_user_tables(self) -> Dict[str, TableInfo]:
         """Get non-system tables only."""
-        return {
-            name: table for name, table in self.tables.items()
-            if not table.is_system_table
-        }
+        return {name: table for name, table in self.tables.items() if not table.is_system_table}
 
 
 class MDBExtractor:
     """Extracts schema and data from Microsoft Access MDB files."""
 
     # System table prefixes to skip
-    SYSTEM_PREFIXES = ('MSys', 'USys', '~')
+    SYSTEM_PREFIXES = ("MSys", "USys", "~")
 
     def __init__(self, mdb_path: Path):
         """Initialize with path to MDB file."""
@@ -283,7 +284,7 @@ class MDBExtractor:
         columns = list(table_data.keys())
         row_count = len(table_data[columns[0]]) if columns else 0
 
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        with open(output_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
 
             if include_header:
@@ -328,7 +329,7 @@ class MDBExtractor:
 
             # Add type-specific formatting
             if "DATE" in col.oracle_type:
-                col_specs.append(f"    {oracle_col_name} DATE \"YYYY-MM-DD HH24:MI:SS\"")
+                col_specs.append(f'    {oracle_col_name} DATE "YYYY-MM-DD HH24:MI:SS"')
             elif "CLOB" in col.oracle_type or "BLOB" in col.oracle_type:
                 col_specs.append(f"    {oracle_col_name} CHAR(1000000)")
             else:
@@ -342,10 +343,10 @@ class MDBExtractor:
     def _sanitize_identifier(self, name: str) -> str:
         """Sanitize identifier for Oracle (uppercase, no special chars)."""
         # Replace spaces and special characters
-        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", name)
         # Ensure it starts with a letter
         if sanitized and sanitized[0].isdigit():
-            sanitized = 'C_' + sanitized
+            sanitized = "C_" + sanitized
         # Oracle identifiers are uppercase by default
         return sanitized.upper()
 
@@ -378,9 +379,9 @@ class MDBExtractor:
             return "Y" if value else "N"
         elif isinstance(value, (datetime, date)):
             if isinstance(value, datetime):
-                return value.strftime('%Y-%m-%d %H:%M:%S')
+                return value.strftime("%Y-%m-%d %H:%M:%S")
             else:
-                return value.strftime('%Y-%m-%d')
+                return value.strftime("%Y-%m-%d")
         elif isinstance(value, bytes):
             return value.hex()
         else:

@@ -4,9 +4,10 @@ Font Mapper for RPT to RDF Converter.
 Maps Crystal Reports fonts to Oracle-compatible fonts.
 """
 
-from typing import Optional
-import yaml
 from pathlib import Path
+from typing import Optional
+
+import yaml
 
 from ..utils.logger import get_logger
 
@@ -62,8 +63,12 @@ class FontMapper:
 
         # Initialize with default mappings
         self.font_map = self.DEFAULT_FONT_MAP.copy()
-        self.default_font = default_font or self.DEFAULT_FONT
-        self.default_size = default_size or self.DEFAULT_SIZE
+        self.default_font = self.DEFAULT_FONT
+        self.default_size = self.DEFAULT_SIZE
+
+        # Track if constructor params were explicitly provided
+        explicit_font = default_font is not None
+        explicit_size = default_size is not None
 
         # Load custom mappings from config if provided
         if config_path:
@@ -73,6 +78,12 @@ class FontMapper:
             default_config = Path(__file__).parent.parent.parent / "config" / "font_mappings.yaml"
             if default_config.exists():
                 self._load_config(str(default_config))
+
+        # Constructor params override config values
+        if explicit_font:
+            self.default_font = default_font
+        if explicit_size:
+            self.default_size = default_size
 
     def _load_config(self, config_path: str) -> None:
         """Load font mappings from YAML configuration file.

@@ -8,16 +8,16 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 from xml.dom import minidom
 
+from ..transformation.condition_mapper import FormatTrigger
+from ..transformation.formula_translator import TranslatedFormula
+from ..transformation.layout_mapper import OracleField, OracleFrame, OracleLayout
+from ..transformation.parameter_mapper import OracleParameter
 from ..transformation.transformer import (
-    TransformedReport,
-    TransformedSubreport,
     TransformedChart,
     TransformedCrossTab,
+    TransformedReport,
+    TransformedSubreport,
 )
-from ..transformation.layout_mapper import OracleLayout, OracleFrame, OracleField
-from ..transformation.formula_translator import TranslatedFormula
-from ..transformation.parameter_mapper import OracleParameter
-from ..transformation.condition_mapper import FormatTrigger
 from ..utils.logger import get_logger
 
 
@@ -43,10 +43,13 @@ class OracleXMLGenerator:
         self.logger.info(f"Generating Oracle XML for: {report.name}")
 
         # Create root report element
-        root = ET.Element("report", {
-            "name": report.name,
-            "DTDVersion": self.DTD_VERSION,
-        })
+        root = ET.Element(
+            "report",
+            {
+                "name": report.name,
+                "DTDVersion": self.DTD_VERSION,
+            },
+        )
 
         # Generate data model
         self._generate_data_model(root, report)
@@ -87,9 +90,13 @@ class OracleXMLGenerator:
 
         # Generate data sources/queries
         for query in report.queries:
-            ds = ET.SubElement(data, "dataSource", {
-                "name": query["name"],
-            })
+            ds = ET.SubElement(
+                data,
+                "dataSource",
+                {
+                    "name": query["name"],
+                },
+            )
 
             # Add SQL
             select = ET.SubElement(ds, "select")
@@ -101,24 +108,36 @@ class OracleXMLGenerator:
             main_query = report.queries[0]
 
             # Create the detail group
-            detail_group = ET.SubElement(data, "group", {
-                "name": "G_DETAIL",
-                "source": main_query["name"],
-            })
+            detail_group = ET.SubElement(
+                data,
+                "group",
+                {
+                    "name": "G_DETAIL",
+                    "source": main_query["name"],
+                },
+            )
 
             # Add columns as data items
             for col in main_query.get("columns", []):
-                ET.SubElement(detail_group, "dataItem", {
-                    "name": col["name"],
-                    "datatype": self._map_datatype(col["data_type"]),
-                })
+                ET.SubElement(
+                    detail_group,
+                    "dataItem",
+                    {
+                        "name": col["name"],
+                        "datatype": self._map_datatype(col["data_type"]),
+                    },
+                )
 
         # Generate parameters
         for param in report.parameters:
-            p = ET.SubElement(data, "parameter", {
-                "name": param.oracle_name,
-                "datatype": self._map_datatype(param.data_type),
-            })
+            p = ET.SubElement(
+                data,
+                "parameter",
+                {
+                    "name": param.oracle_name,
+                    "datatype": self._map_datatype(param.data_type),
+                },
+            )
 
             if param.initial_value:
                 init = ET.SubElement(p, "initialValue")
@@ -127,18 +146,26 @@ class OracleXMLGenerator:
         # Generate formula placeholders as data items
         for formula in report.formulas:
             if formula.success:
-                ET.SubElement(data, "formula", {
-                    "name": formula.oracle_name,
-                    "source": f"{formula.oracle_name}formula",
-                    "datatype": self._map_datatype(formula.return_type),
-                })
+                ET.SubElement(
+                    data,
+                    "formula",
+                    {
+                        "name": formula.oracle_name,
+                        "source": f"{formula.oracle_name}formula",
+                        "datatype": self._map_datatype(formula.return_type),
+                    },
+                )
 
     def _generate_layout(self, root: ET.Element, layout: OracleLayout) -> None:
         """Generate the layout section."""
-        layout_elem = ET.SubElement(root, "layout", {
-            "panelPrintOrder": "acrossDown",
-            "direction": "default",
-        })
+        layout_elem = ET.SubElement(
+            root,
+            "layout",
+            {
+                "panelPrintOrder": "acrossDown",
+                "direction": "default",
+            },
+        )
 
         # Add main section
         section = ET.SubElement(layout_elem, "section", {"name": "main"})
@@ -160,27 +187,35 @@ class OracleXMLGenerator:
         """Generate a frame element with its children."""
         # Determine element type
         if frame.frame_type == "repeating":
-            frame_elem = ET.SubElement(parent, "repeatingFrame", {
-                "name": frame.name,
-                "source": frame.source_group or "",
-                "x": str(int(frame.x)),
-                "y": str(int(frame.y)),
-                "width": str(int(frame.width)),
-                "height": str(int(frame.height)),
-                "verticalElasticity": frame.vertical_elasticity,
-                "horizontalElasticity": frame.horizontal_elasticity,
-                "printDirection": frame.print_direction,
-            })
+            frame_elem = ET.SubElement(
+                parent,
+                "repeatingFrame",
+                {
+                    "name": frame.name,
+                    "source": frame.source_group or "",
+                    "x": str(int(frame.x)),
+                    "y": str(int(frame.y)),
+                    "width": str(int(frame.width)),
+                    "height": str(int(frame.height)),
+                    "verticalElasticity": frame.vertical_elasticity,
+                    "horizontalElasticity": frame.horizontal_elasticity,
+                    "printDirection": frame.print_direction,
+                },
+            )
         else:
-            frame_elem = ET.SubElement(parent, "frame", {
-                "name": frame.name,
-                "x": str(int(frame.x)),
-                "y": str(int(frame.y)),
-                "width": str(int(frame.width)),
-                "height": str(int(frame.height)),
-                "verticalElasticity": frame.vertical_elasticity,
-                "horizontalElasticity": frame.horizontal_elasticity,
-            })
+            frame_elem = ET.SubElement(
+                parent,
+                "frame",
+                {
+                    "name": frame.name,
+                    "x": str(int(frame.x)),
+                    "y": str(int(frame.y)),
+                    "width": str(int(frame.width)),
+                    "height": str(int(frame.height)),
+                    "verticalElasticity": frame.vertical_elasticity,
+                    "horizontalElasticity": frame.horizontal_elasticity,
+                },
+            )
 
         # Generate fields in frame
         for field in frame.fields:
@@ -236,10 +271,14 @@ class OracleXMLGenerator:
                 continue
 
             # Create function element
-            func = ET.SubElement(program_units, "function", {
-                "name": f"{formula.oracle_name}formula",
-                "returnType": formula.return_type,
-            })
+            func = ET.SubElement(
+                program_units,
+                "function",
+                {
+                    "name": f"{formula.oracle_name}formula",
+                    "returnType": formula.return_type,
+                },
+            )
 
             # Add source code
             source = ET.SubElement(func, "textSource")
@@ -254,10 +293,14 @@ class OracleXMLGenerator:
         if format_triggers:
             for trigger in format_triggers:
                 # Create function element for format trigger
-                func = ET.SubElement(program_units, "function", {
-                    "name": trigger.name,
-                    "returnType": "BOOLEAN",
-                })
+                func = ET.SubElement(
+                    program_units,
+                    "function",
+                    {
+                        "name": trigger.name,
+                        "returnType": "BOOLEAN",
+                    },
+                )
 
                 # Add source code
                 source = ET.SubElement(func, "textSource")
@@ -286,17 +329,25 @@ class OracleXMLGenerator:
         param_form = ET.SubElement(root, "parameterForm")
 
         for param in parameters:
-            field = ET.SubElement(param_form, "parameterField", {
-                "name": f"PF_{param.oracle_name}",
-                "source": param.oracle_name,
-                "width": str(param.width * 6),  # Approximate character to pixel
-                "label": param.prompt_text,
-            })
+            field = ET.SubElement(
+                param_form,
+                "parameterField",
+                {
+                    "name": f"PF_{param.oracle_name}",
+                    "source": param.oracle_name,
+                    "width": str(param.width * 6),  # Approximate character to pixel
+                    "label": param.prompt_text,
+                },
+            )
 
             if param.list_of_values:
-                lov = ET.SubElement(field, "listOfValues", {
-                    "restrictToList": "no",
-                })
+                lov = ET.SubElement(
+                    field,
+                    "listOfValues",
+                    {
+                        "restrictToList": "no",
+                    },
+                )
                 lov_query = ET.SubElement(lov, "selectStatement")
                 lov_query.text = param.list_of_values
 
@@ -330,33 +381,49 @@ class OracleXMLGenerator:
 
         for sr in subreports:
             # Add subreport reference element
-            sr_elem = ET.SubElement(sr_section, "subreport", {
-                "name": sr.oracle_name,
-                "originalName": sr.name,
-            })
+            sr_elem = ET.SubElement(
+                sr_section,
+                "subreport",
+                {
+                    "name": sr.oracle_name,
+                    "originalName": sr.name,
+                },
+            )
 
             # Add position info
-            ET.SubElement(sr_elem, "position", {
-                "x": str(int(sr.x)),
-                "y": str(int(sr.y)),
-                "width": str(int(sr.width)),
-                "height": str(int(sr.height)),
-            })
+            ET.SubElement(
+                sr_elem,
+                "position",
+                {
+                    "x": str(int(sr.x)),
+                    "y": str(int(sr.y)),
+                    "width": str(int(sr.width)),
+                    "height": str(int(sr.height)),
+                },
+            )
 
             # Add parameter links
             if sr.parameter_links:
                 links = ET.SubElement(sr_elem, "parameterLinks")
                 for parent_col, sr_param in sr.parameter_links:
-                    ET.SubElement(links, "link", {
-                        "parentColumn": parent_col,
-                        "subreportParameter": sr_param,
-                    })
+                    ET.SubElement(
+                        links,
+                        "link",
+                        {
+                            "parentColumn": parent_col,
+                            "subreportParameter": sr_param,
+                        },
+                    )
 
             # Add suppress trigger reference
             if sr.suppress_trigger:
-                ET.SubElement(sr_elem, "suppressTrigger", {
-                    "function": sr.suppress_trigger,
-                })
+                ET.SubElement(
+                    sr_elem,
+                    "suppressTrigger",
+                    {
+                        "function": sr.suppress_trigger,
+                    },
+                )
 
             # Add on-demand flag
             if sr.on_demand:
@@ -383,9 +450,13 @@ class OracleXMLGenerator:
 
         # Generate a helper procedure for each subreport
         for sr in subreports:
-            proc = ET.SubElement(program_units, "procedure", {
-                "name": f"RUN_{sr.oracle_name}",
-            })
+            proc = ET.SubElement(
+                program_units,
+                "procedure",
+                {
+                    "name": f"RUN_{sr.oracle_name}",
+                },
+            )
 
             # Build parameter list
             params = []
@@ -447,43 +518,67 @@ end RUN_{sr.oracle_name};"""
 
         for chart in charts:
             # Create chart element
-            chart_elem = ET.SubElement(charts_section, "chart", {
-                "name": chart.oracle_name,
-                "originalName": chart.name,
-                "chartType": chart.chart_type,
-            })
+            chart_elem = ET.SubElement(
+                charts_section,
+                "chart",
+                {
+                    "name": chart.oracle_name,
+                    "originalName": chart.name,
+                    "chartType": chart.chart_type,
+                },
+            )
 
             # Position and size
-            ET.SubElement(chart_elem, "position", {
-                "x": str(int(chart.x)),
-                "y": str(int(chart.y)),
-                "width": str(int(chart.width)),
-                "height": str(int(chart.height)),
-            })
+            ET.SubElement(
+                chart_elem,
+                "position",
+                {
+                    "x": str(int(chart.x)),
+                    "y": str(int(chart.y)),
+                    "width": str(int(chart.width)),
+                    "height": str(int(chart.height)),
+                },
+            )
 
             # Data configuration
             data_config = ET.SubElement(chart_elem, "dataConfig")
             if chart.category_column:
-                ET.SubElement(data_config, "categoryColumn", {
-                    "name": chart.category_column,
-                })
+                ET.SubElement(
+                    data_config,
+                    "categoryColumn",
+                    {
+                        "name": chart.category_column,
+                    },
+                )
             if chart.value_columns:
                 for col in chart.value_columns:
-                    ET.SubElement(data_config, "valueColumn", {
-                        "name": col,
-                    })
+                    ET.SubElement(
+                        data_config,
+                        "valueColumn",
+                        {
+                            "name": col,
+                        },
+                    )
             if chart.group_column:
-                ET.SubElement(data_config, "groupColumn", {
-                    "name": chart.group_column,
-                })
+                ET.SubElement(
+                    data_config,
+                    "groupColumn",
+                    {
+                        "name": chart.group_column,
+                    },
+                )
 
             # Appearance
             appearance = ET.SubElement(chart_elem, "appearance")
             if chart.title:
                 ET.SubElement(appearance, "title", {"text": chart.title})
-            ET.SubElement(appearance, "legend", {
-                "position": chart.legend_position,
-            })
+            ET.SubElement(
+                appearance,
+                "legend",
+                {
+                    "position": chart.legend_position,
+                },
+            )
             if chart.is_3d:
                 appearance.set("is3D", "yes")
 
@@ -511,9 +606,13 @@ end RUN_{sr.oracle_name};"""
             program_units = ET.SubElement(root, "programUnits")
 
         for chart in charts:
-            proc = ET.SubElement(program_units, "procedure", {
-                "name": f"INIT_{chart.oracle_name}",
-            })
+            proc = ET.SubElement(
+                program_units,
+                "procedure",
+                {
+                    "name": f"INIT_{chart.oracle_name}",
+                },
+            )
 
             # Build column list for OG.SetData
             value_cols = ", ".join(f"'{col}'" for col in chart.value_columns) or "'VALUE'"
@@ -569,18 +668,26 @@ end INIT_{chart.oracle_name};"""
 
         for ct in crosstabs:
             # Create cross-tab element
-            ct_elem = ET.SubElement(crosstabs_section, "crosstab", {
-                "name": ct.oracle_name,
-                "originalName": ct.name,
-            })
+            ct_elem = ET.SubElement(
+                crosstabs_section,
+                "crosstab",
+                {
+                    "name": ct.oracle_name,
+                    "originalName": ct.name,
+                },
+            )
 
             # Position and size
-            ET.SubElement(ct_elem, "position", {
-                "x": str(int(ct.x)),
-                "y": str(int(ct.y)),
-                "width": str(int(ct.width)),
-                "height": str(int(ct.height)),
-            })
+            ET.SubElement(
+                ct_elem,
+                "position",
+                {
+                    "x": str(int(ct.x)),
+                    "y": str(int(ct.y)),
+                    "width": str(int(ct.width)),
+                    "height": str(int(ct.height)),
+                },
+            )
 
             # Row dimensions
             if ct.row_columns:
@@ -598,18 +705,26 @@ end INIT_{chart.oracle_name};"""
             if ct.summary_columns:
                 measures_elem = ET.SubElement(ct_elem, "measures")
                 for summary in ct.summary_columns:
-                    ET.SubElement(measures_elem, "measure", {
-                        "name": summary.get("name", ""),
-                        "column": summary.get("column", ""),
-                        "function": summary.get("function", "SUM"),
-                    })
+                    ET.SubElement(
+                        measures_elem,
+                        "measure",
+                        {
+                            "name": summary.get("name", ""),
+                            "column": summary.get("column", ""),
+                            "function": summary.get("function", "SUM"),
+                        },
+                    )
 
             # Totals configuration
-            ET.SubElement(ct_elem, "totals", {
-                "showRowTotals": "yes" if ct.show_row_totals else "no",
-                "showColumnTotals": "yes" if ct.show_column_totals else "no",
-                "showGrandTotal": "yes" if ct.show_grand_total else "no",
-            })
+            ET.SubElement(
+                ct_elem,
+                "totals",
+                {
+                    "showRowTotals": "yes" if ct.show_row_totals else "no",
+                    "showColumnTotals": "yes" if ct.show_column_totals else "no",
+                    "showGrandTotal": "yes" if ct.show_grand_total else "no",
+                },
+            )
 
             # Add warnings as comments
             for warning in ct.warnings:
@@ -635,9 +750,13 @@ end INIT_{chart.oracle_name};"""
             program_units = ET.SubElement(root, "programUnits")
 
         for ct in crosstabs:
-            proc = ET.SubElement(program_units, "procedure", {
-                "name": f"QUERY_{ct.oracle_name}",
-            })
+            proc = ET.SubElement(
+                program_units,
+                "procedure",
+                {
+                    "name": f"QUERY_{ct.oracle_name}",
+                },
+            )
 
             # Build column lists
             row_cols = ", ".join(ct.row_columns) if ct.row_columns else "ROW_DIM"

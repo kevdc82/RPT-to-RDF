@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from ..utils.logger import get_logger
 from ..utils.error_handler import ConversionError, ErrorCategory
+from ..utils.logger import get_logger
 
 
 @dataclass
@@ -270,23 +270,27 @@ class RDFConverter:
             results = []
             for xml_path, rdf_path in conversions:
                 if rdf_path.exists() and rdf_path.stat().st_size > 0:
-                    results.append(ConversionResult(
-                        xml_path=xml_path,
-                        rdf_path=rdf_path,
-                        success=True,
-                        duration_seconds=(time.time() - start_time) / len(conversions),
-                    ))
+                    results.append(
+                        ConversionResult(
+                            xml_path=xml_path,
+                            rdf_path=rdf_path,
+                            success=True,
+                            duration_seconds=(time.time() - start_time) / len(conversions),
+                        )
+                    )
                 else:
-                    results.append(ConversionResult(
-                        xml_path=xml_path,
-                        rdf_path=rdf_path,
-                        success=False,
-                        error=ConversionError(
-                            category=ErrorCategory.RDF_CONVERSION_FAILED,
-                            message="RDF file not created in batch conversion",
-                            is_fatal=True,
-                        ),
-                    ))
+                    results.append(
+                        ConversionResult(
+                            xml_path=xml_path,
+                            rdf_path=rdf_path,
+                            success=False,
+                            error=ConversionError(
+                                category=ErrorCategory.RDF_CONVERSION_FAILED,
+                                message="RDF file not created in batch conversion",
+                                is_fatal=True,
+                            ),
+                        )
+                    )
 
             return results
 
@@ -298,6 +302,7 @@ class RDFConverter:
     def _get_oracle_env(self) -> dict:
         """Get environment variables for Oracle."""
         import os
+
         env = os.environ.copy()
         env["ORACLE_HOME"] = str(self.oracle_home)
         env["PATH"] = f"{self.oracle_home / 'bin'};{env.get('PATH', '')}"

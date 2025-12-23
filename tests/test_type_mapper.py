@@ -5,8 +5,9 @@ Tests the conversion of Crystal Reports data types to Oracle data types.
 """
 
 import pytest
-from src.transformation.type_mapper import TypeMapper, OracleType
+
 from src.parsing.report_model import DataType
+from src.transformation.type_mapper import OracleType, TypeMapper
 
 
 class TestOracleType:
@@ -374,18 +375,14 @@ class TestTypeMapperCustomMappings:
 
     def test_custom_string_length(self):
         """Test custom mapping for STRING with different default length."""
-        custom_mappings = {
-            DataType.STRING: OracleType("VARCHAR2", length=2000)
-        }
+        custom_mappings = {DataType.STRING: OracleType("VARCHAR2", length=2000)}
         mapper = TypeMapper(custom_mappings=custom_mappings)
         oracle_type = mapper.map_type(DataType.STRING)
         assert oracle_type.length == 2000
 
     def test_custom_currency_precision(self):
         """Test custom mapping for CURRENCY with different precision."""
-        custom_mappings = {
-            DataType.CURRENCY: OracleType("NUMBER", precision=20, scale=4)
-        }
+        custom_mappings = {DataType.CURRENCY: OracleType("NUMBER", precision=20, scale=4)}
         mapper = TypeMapper(custom_mappings=custom_mappings)
         oracle_type = mapper.map_type(DataType.CURRENCY)
         assert oracle_type.precision == 20
@@ -393,9 +390,7 @@ class TestTypeMapperCustomMappings:
 
     def test_custom_boolean_mapping(self):
         """Test custom mapping for BOOLEAN to NUMBER."""
-        custom_mappings = {
-            DataType.BOOLEAN: OracleType("NUMBER", precision=1)
-        }
+        custom_mappings = {DataType.BOOLEAN: OracleType("NUMBER", precision=1)}
         mapper = TypeMapper(custom_mappings=custom_mappings)
         oracle_type = mapper.map_type(DataType.BOOLEAN)
         assert oracle_type.name == "NUMBER"
@@ -403,9 +398,7 @@ class TestTypeMapperCustomMappings:
 
     def test_partial_custom_mappings(self):
         """Test that custom mappings only override specified types."""
-        custom_mappings = {
-            DataType.STRING: OracleType("VARCHAR2", length=1000)
-        }
+        custom_mappings = {DataType.STRING: OracleType("VARCHAR2", length=1000)}
         mapper = TypeMapper(custom_mappings=custom_mappings)
 
         # Custom mapping applied

@@ -5,8 +5,9 @@ Tests the conversion of Crystal Reports conditions to Oracle format triggers.
 """
 
 import pytest
-from src.transformation.condition_mapper import ConditionMapper, FormatTrigger
+
 from src.parsing.report_model import FormatSpec
+from src.transformation.condition_mapper import ConditionMapper, FormatTrigger
 
 
 class TestConditionMapper:
@@ -276,9 +277,7 @@ class TestConditionMapperIntegration:
             "{invoice.customer_id} is not null"
         )
 
-        trigger = mapper.convert_suppress_condition(
-            crystal_condition, "HIGH_VALUE_INVOICE"
-        )
+        trigger = mapper.convert_suppress_condition(crystal_condition, "HIGH_VALUE_INVOICE")
 
         # Verify the trigger
         assert trigger.name == "FMT_SUPPRESS_HIGH_VALUE_INVOICE"

@@ -4,14 +4,14 @@ HTML Preview Generator for RPT to RDF Converter.
 Generates HTML preview of converted reports for visual verification.
 """
 
+from html import escape
 from pathlib import Path
 from typing import Optional
-from html import escape
 
 from ..parsing.report_model import (
+    Field,
     ReportModel,
     Section,
-    Field,
     SectionType,
 )
 from ..utils.logger import get_logger
@@ -57,12 +57,12 @@ class HTMLPreviewGenerator:
             page_width, page_height = page_height, page_width
 
         # Apply margins
-        content_width = page_width - (
-            report.metadata.left_margin + report.metadata.right_margin
-        ) * 72
-        content_height = page_height - (
-            report.metadata.top_margin + report.metadata.bottom_margin
-        ) * 72
+        content_width = (
+            page_width - (report.metadata.left_margin + report.metadata.right_margin) * 72
+        )
+        content_height = (
+            page_height - (report.metadata.top_margin + report.metadata.bottom_margin) * 72
+        )
 
         # Build HTML sections
         sections_html = []
@@ -260,8 +260,8 @@ class HTMLPreviewGenerator:
         metadata_items = [
             f"<strong>Paper Size:</strong> {metadata.paper_size}",
             f"<strong>Orientation:</strong> {metadata.page_orientation}",
-            f"<strong>Margins:</strong> L:{metadata.left_margin}\" R:{metadata.right_margin}\" "
-            f"T:{metadata.top_margin}\" B:{metadata.bottom_margin}\"",
+            f'<strong>Margins:</strong> L:{metadata.left_margin}" R:{metadata.right_margin}" '
+            f'T:{metadata.top_margin}" B:{metadata.bottom_margin}"',
         ]
 
         if metadata.title:
@@ -582,7 +582,9 @@ class HTMLPreviewGenerator:
             layout_elem = root.find("layout")
             if layout_elem is None:
                 self.logger.warning("No layout section found in XML")
-                html_content = self._generate_minimal_html(report_name, "No layout information found in XML")
+                html_content = self._generate_minimal_html(
+                    report_name, "No layout information found in XML"
+                )
             else:
                 html_content = self._generate_xml_preview_html(report_name, layout_elem)
 

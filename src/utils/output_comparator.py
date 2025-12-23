@@ -25,6 +25,7 @@ from typing import Any, Optional
 
 class ComparisonResult(Enum):
     """Result of a comparison operation."""
+
     IDENTICAL = "identical"
     SIMILAR = "similar"  # Within acceptable threshold
     DIFFERENT = "different"
@@ -34,6 +35,7 @@ class ComparisonResult(Enum):
 
 class DifferenceType(Enum):
     """Types of differences found during comparison."""
+
     MISSING_ROW = "missing_row"
     EXTRA_ROW = "extra_row"
     VALUE_MISMATCH = "value_mismatch"
@@ -47,6 +49,7 @@ class DifferenceType(Enum):
 @dataclass
 class Difference:
     """Represents a single difference between two outputs."""
+
     diff_type: DifferenceType
     location: str  # Row/column, page number, or coordinate
     expected: Any
@@ -69,6 +72,7 @@ class Difference:
 @dataclass
 class ComparisonReport:
     """Report of comparison results between two outputs."""
+
     source_file: str
     target_file: str
     comparison_type: str  # csv, pdf, data
@@ -228,24 +232,28 @@ class CSVComparator:
         extra = target_set - source_set
 
         for col in missing:
-            report.differences.append(Difference(
-                diff_type=DifferenceType.COLUMN_MISMATCH,
-                location="headers",
-                expected=col,
-                actual="(missing)",
-                severity="error",
-                details=f"Column '{col}' exists in source but not in target",
-            ))
+            report.differences.append(
+                Difference(
+                    diff_type=DifferenceType.COLUMN_MISMATCH,
+                    location="headers",
+                    expected=col,
+                    actual="(missing)",
+                    severity="error",
+                    details=f"Column '{col}' exists in source but not in target",
+                )
+            )
 
         for col in extra:
-            report.differences.append(Difference(
-                diff_type=DifferenceType.COLUMN_MISMATCH,
-                location="headers",
-                expected="(not present)",
-                actual=col,
-                severity="warning",
-                details=f"Column '{col}' exists in target but not in source",
-            ))
+            report.differences.append(
+                Difference(
+                    diff_type=DifferenceType.COLUMN_MISMATCH,
+                    location="headers",
+                    expected="(not present)",
+                    actual=col,
+                    severity="warning",
+                    details=f"Column '{col}' exists in target but not in source",
+                )
+            )
 
         return len(missing) == 0 and len(extra) == 0
 
@@ -261,23 +269,27 @@ class CSVComparator:
 
         for i in range(max_rows):
             if i >= len(source_rows):
-                report.differences.append(Difference(
-                    diff_type=DifferenceType.EXTRA_ROW,
-                    location=f"row {i + 1}",
-                    expected="(no row)",
-                    actual=str(target_rows[i]),
-                    severity="warning",
-                ))
+                report.differences.append(
+                    Difference(
+                        diff_type=DifferenceType.EXTRA_ROW,
+                        location=f"row {i + 1}",
+                        expected="(no row)",
+                        actual=str(target_rows[i]),
+                        severity="warning",
+                    )
+                )
                 continue
 
             if i >= len(target_rows):
-                report.differences.append(Difference(
-                    diff_type=DifferenceType.MISSING_ROW,
-                    location=f"row {i + 1}",
-                    expected=str(source_rows[i]),
-                    actual="(no row)",
-                    severity="error",
-                ))
+                report.differences.append(
+                    Difference(
+                        diff_type=DifferenceType.MISSING_ROW,
+                        location=f"row {i + 1}",
+                        expected=str(source_rows[i]),
+                        actual="(no row)",
+                        severity="error",
+                    )
+                )
                 continue
 
             # Compare cell values
@@ -286,13 +298,15 @@ class CSVComparator:
                 target_val = target_rows[i].get(col, "")
 
                 if not self._values_equal(source_val, target_val):
-                    report.differences.append(Difference(
-                        diff_type=DifferenceType.VALUE_MISMATCH,
-                        location=f"row {i + 1}, column '{col}'",
-                        expected=source_val,
-                        actual=target_val,
-                        severity="warning",
-                    ))
+                    report.differences.append(
+                        Difference(
+                            diff_type=DifferenceType.VALUE_MISMATCH,
+                            location=f"row {i + 1}, column '{col}'",
+                            expected=source_val,
+                            actual=target_val,
+                            severity="warning",
+                        )
+                    )
 
     def _compare_rows_by_key(
         self,
@@ -303,6 +317,7 @@ class CSVComparator:
         report: ComparisonReport,
     ) -> None:
         """Compare rows by key columns (for unordered comparison)."""
+
         def make_key(row: dict) -> tuple:
             return tuple(self._normalize_string(str(row.get(k, ""))) for k in key_columns)
 
@@ -314,22 +329,26 @@ class CSVComparator:
         extra_keys = set(target_by_key.keys()) - set(source_by_key.keys())
 
         for key in missing_keys:
-            report.differences.append(Difference(
-                diff_type=DifferenceType.MISSING_ROW,
-                location=f"key={key}",
-                expected=str(source_by_key[key]),
-                actual="(not found)",
-                severity="error",
-            ))
+            report.differences.append(
+                Difference(
+                    diff_type=DifferenceType.MISSING_ROW,
+                    location=f"key={key}",
+                    expected=str(source_by_key[key]),
+                    actual="(not found)",
+                    severity="error",
+                )
+            )
 
         for key in extra_keys:
-            report.differences.append(Difference(
-                diff_type=DifferenceType.EXTRA_ROW,
-                location=f"key={key}",
-                expected="(not found)",
-                actual=str(target_by_key[key]),
-                severity="warning",
-            ))
+            report.differences.append(
+                Difference(
+                    diff_type=DifferenceType.EXTRA_ROW,
+                    location=f"key={key}",
+                    expected="(not found)",
+                    actual=str(target_by_key[key]),
+                    severity="warning",
+                )
+            )
 
         # Compare matching rows
         common_keys = set(source_by_key.keys()) & set(target_by_key.keys())
@@ -345,13 +364,15 @@ class CSVComparator:
                 target_val = target_row.get(col, "")
 
                 if not self._values_equal(source_val, target_val):
-                    report.differences.append(Difference(
-                        diff_type=DifferenceType.VALUE_MISMATCH,
-                        location=f"key={key}, column '{col}'",
-                        expected=source_val,
-                        actual=target_val,
-                        severity="warning",
-                    ))
+                    report.differences.append(
+                        Difference(
+                            diff_type=DifferenceType.VALUE_MISMATCH,
+                            location=f"key={key}, column '{col}'",
+                            expected=source_val,
+                            actual=target_val,
+                            severity="warning",
+                        )
+                    )
 
     def _normalize_string(self, value: str) -> str:
         """Normalize a string value for comparison."""
@@ -436,12 +457,14 @@ class PDFComparator:
 
         try:
             from PIL import Image
+
             self.available_methods["pillow"] = True
         except ImportError:
             pass
 
         try:
             import pdf2image
+
             self.available_methods["pdf2image"] = True
         except ImportError:
             pass
@@ -521,9 +544,10 @@ class PDFComparator:
     ) -> ComparisonReport:
         """Compare PDFs by converting to images and comparing pixels."""
         try:
+            import math
+
             from pdf2image import convert_from_path
             from PIL import Image, ImageChops
-            import math
 
             source_images = convert_from_path(str(source_path), dpi=self.dpi)
             target_images = convert_from_path(str(target_path), dpi=self.dpi)
@@ -532,17 +556,21 @@ class PDFComparator:
             report.metadata["target_page_count"] = len(target_images)
 
             if len(source_images) != len(target_images):
-                report.differences.append(Difference(
-                    diff_type=DifferenceType.LAYOUT_DIFFERENCE,
-                    location="document",
-                    expected=f"{len(source_images)} pages",
-                    actual=f"{len(target_images)} pages",
-                    severity="warning",
-                ))
+                report.differences.append(
+                    Difference(
+                        diff_type=DifferenceType.LAYOUT_DIFFERENCE,
+                        location="document",
+                        expected=f"{len(source_images)} pages",
+                        actual=f"{len(target_images)} pages",
+                        severity="warning",
+                    )
+                )
 
             # Compare each page
             page_scores = []
-            pages_to_compare = pages or list(range(1, min(len(source_images), len(target_images)) + 1))
+            pages_to_compare = pages or list(
+                range(1, min(len(source_images), len(target_images)) + 1)
+            )
 
             for page_num in pages_to_compare:
                 idx = page_num - 1
@@ -555,13 +583,15 @@ class PDFComparator:
                 # Resize if dimensions differ
                 if source_img.size != target_img.size:
                     target_img = target_img.resize(source_img.size, Image.Resampling.LANCZOS)
-                    report.differences.append(Difference(
-                        diff_type=DifferenceType.LAYOUT_DIFFERENCE,
-                        location=f"page {page_num}",
-                        expected=f"size {source_img.size}",
-                        actual=f"size {target_images[idx].size}",
-                        severity="info",
-                    ))
+                    report.differences.append(
+                        Difference(
+                            diff_type=DifferenceType.LAYOUT_DIFFERENCE,
+                            location=f"page {page_num}",
+                            expected=f"size {source_img.size}",
+                            actual=f"size {target_images[idx].size}",
+                            severity="info",
+                        )
+                    )
 
                 # Calculate similarity
                 diff = ImageChops.difference(source_img.convert("RGB"), target_img.convert("RGB"))
@@ -577,13 +607,15 @@ class PDFComparator:
                 page_scores.append(page_similarity)
 
                 if page_similarity < self.similarity_threshold:
-                    report.differences.append(Difference(
-                        diff_type=DifferenceType.VISUAL_DIFFERENCE,
-                        location=f"page {page_num}",
-                        expected="visual match",
-                        actual=f"{page_similarity:.1f}% similar",
-                        severity="warning" if page_similarity >= 80 else "error",
-                    ))
+                    report.differences.append(
+                        Difference(
+                            diff_type=DifferenceType.VISUAL_DIFFERENCE,
+                            location=f"page {page_num}",
+                            expected="visual match",
+                            actual=f"{page_similarity:.1f}% similar",
+                            severity="warning" if page_similarity >= 80 else "error",
+                        )
+                    )
 
             # Overall similarity
             report.similarity_score = sum(page_scores) / len(page_scores) if page_scores else 0
@@ -633,13 +665,15 @@ class PDFComparator:
                 report.result = ComparisonResult.SIMILAR
             else:
                 report.result = ComparisonResult.DIFFERENT
-                report.differences.append(Difference(
-                    diff_type=DifferenceType.VALUE_MISMATCH,
-                    location="document text",
-                    expected=f"{len(source_words)} unique words",
-                    actual=f"{len(target_words)} unique words",
-                    severity="warning",
-                ))
+                report.differences.append(
+                    Difference(
+                        diff_type=DifferenceType.VALUE_MISMATCH,
+                        location="document text",
+                        expected=f"{len(source_words)} unique words",
+                        actual=f"{len(target_words)} unique words",
+                        severity="warning",
+                    )
+                )
 
         except Exception as e:
             report.result = ComparisonResult.ERROR
@@ -668,14 +702,16 @@ class PDFComparator:
             else:
                 report.result = ComparisonResult.DIFFERENT
                 report.similarity_score = 0.0
-                report.differences.append(Difference(
-                    diff_type=DifferenceType.VALUE_MISMATCH,
-                    location="file hash",
-                    expected=source_hash[:16] + "...",
-                    actual=target_hash[:16] + "...",
-                    severity="info",
-                    details="Files differ; install pdf2image/Pillow for detailed comparison",
-                ))
+                report.differences.append(
+                    Difference(
+                        diff_type=DifferenceType.VALUE_MISMATCH,
+                        location="file hash",
+                        expected=source_hash[:16] + "...",
+                        actual=target_hash[:16] + "...",
+                        severity="info",
+                        details="Files differ; install pdf2image/Pillow for detailed comparison",
+                    )
+                )
 
         except Exception as e:
             report.result = ComparisonResult.ERROR
@@ -828,7 +864,11 @@ class OutputValidator:
 """
 
         for comp_type, report in comparisons.items():
-            sim_class = "high" if report.similarity_score >= 95 else ("medium" if report.similarity_score >= 80 else "low")
+            sim_class = (
+                "high"
+                if report.similarity_score >= 95
+                else ("medium" if report.similarity_score >= 80 else "low")
+            )
             html += f"""
         <div class="comparison">
             <h3>{comp_type.upper()} Comparison</h3>
@@ -843,7 +883,9 @@ class OutputValidator:
             <h4>Differences ({count})</h4>
             <table>
                 <tr><th>Type</th><th>Location</th><th>Expected</th><th>Actual</th><th>Severity</th></tr>
-""".format(count=len(report.differences))
+""".format(
+                    count=len(report.differences)
+                )
 
                 for diff in report.differences[:20]:  # Show first 20
                     html += f"""
@@ -917,11 +959,13 @@ class OutputValidator:
 
             report_path = self.generate_validation_report(name, comparisons, output_dir)
 
-            results.append({
-                "name": name,
-                "report_path": str(report_path),
-                "comparisons": {k: v.to_dict() for k, v in comparisons.items()},
-                "overall_pass": all(r.is_acceptable for r in comparisons.values()),
-            })
+            results.append(
+                {
+                    "name": name,
+                    "report_path": str(report_path),
+                    "comparisons": {k: v.to_dict() for k, v in comparisons.items()},
+                    "overall_pass": all(r.is_acceptable for r in comparisons.values()),
+                }
+            )
 
         return results

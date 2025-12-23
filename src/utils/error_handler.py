@@ -279,10 +279,13 @@ def get_error_details(code: ErrorCode) -> dict[str, str]:
     Returns:
         Dictionary with 'description' and 'suggestion' keys.
     """
-    return ERROR_DETAILS.get(code, {
-        "description": "Unknown error",
-        "suggestion": "Check the logs for more details.",
-    })
+    return ERROR_DETAILS.get(
+        code,
+        {
+            "description": "Unknown error",
+            "suggestion": "Check the logs for more details.",
+        },
+    )
 
 
 class ErrorCategory(Enum):
@@ -676,7 +679,9 @@ class ConversionReport:
         <button class="collapsible">Show {count} successful files</button>
         <div class="content">
             <ul>
-""".format(count=len(self.successful_files))
+""".format(
+                count=len(self.successful_files)
+            )
             for f in self.successful_files:
                 html_content += f"                <li>{html.escape(f)}</li>\n"
             html_content += """            </ul>
@@ -701,8 +706,10 @@ class ConversionReport:
             for p in self.partial_files:
                 warnings_html = ""
                 for w in p.warnings[:5]:  # Show first 5 warnings
-                    cat_class = "formula" if "formula" in w.category.value else (
-                        "layout" if "layout" in w.category.value else ""
+                    cat_class = (
+                        "formula"
+                        if "formula" in w.category.value
+                        else ("layout" if "layout" in w.category.value else "")
                     )
                     warnings_html += f"""
                         <div>
@@ -784,14 +791,16 @@ class ConversionReport:
         output = []
 
         # Header
-        output.append([
-            "File Name",
-            "Status",
-            "Completion %",
-            "Issues Count",
-            "Stage Failed",
-            "Primary Error",
-        ])
+        output.append(
+            [
+                "File Name",
+                "Status",
+                "Completion %",
+                "Issues Count",
+                "Stage Failed",
+                "Primary Error",
+            ]
+        )
 
         # Successful files
         for f in self.successful_files:
@@ -800,29 +809,34 @@ class ConversionReport:
         # Partial files
         for p in self.partial_files:
             primary_error = p.warnings[0].message if p.warnings else ""
-            output.append([
-                p.file_name,
-                "PARTIAL",
-                str(p.completion_percentage),
-                str(p.elements_with_issues),
-                "",
-                primary_error,
-            ])
+            output.append(
+                [
+                    p.file_name,
+                    "PARTIAL",
+                    str(p.completion_percentage),
+                    str(p.elements_with_issues),
+                    "",
+                    primary_error,
+                ]
+            )
 
         # Failed files
         for f in self.failed_files:
             primary_error = f.errors[0].message if f.errors else ""
-            output.append([
-                f.file_name,
-                "FAILED",
-                "0",
-                str(len(f.errors)),
-                f.stage_failed,
-                primary_error,
-            ])
+            output.append(
+                [
+                    f.file_name,
+                    "FAILED",
+                    "0",
+                    str(len(f.errors)),
+                    f.stage_failed,
+                    primary_error,
+                ]
+            )
 
         # Convert to CSV string
         import io
+
         string_io = io.StringIO()
         writer = csv.writer(string_io)
         writer.writerows(output)

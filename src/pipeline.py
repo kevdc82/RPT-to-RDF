@@ -12,21 +12,26 @@ from threading import Lock
 from typing import Callable, Optional
 
 from .config import Config, get_config
-from .extraction.rpt_extractor import RptExtractor, DockerRptExtractor, ExtractionResult, MockRptExtractor
+from .extraction.rpt_extractor import (
+    DockerRptExtractor,
+    ExtractionResult,
+    MockRptExtractor,
+    RptExtractor,
+)
+from .generation.oracle_xml_generator import OracleXMLGenerator
+from .generation.rdf_converter import ConversionResult, MockRDFConverter, RDFConverter
 from .parsing.crystal_parser import CrystalParser
 from .parsing.report_model import ReportModel
-from .transformation.transformer import Transformer, TransformedReport
-from .generation.oracle_xml_generator import OracleXMLGenerator
-from .generation.rdf_converter import RDFConverter, ConversionResult, MockRDFConverter
-from .utils.logger import get_logger, ConversionProgressTracker
+from .transformation.transformer import TransformedReport, Transformer
 from .utils.error_handler import (
-    ConversionReport,
-    PartialConversion,
-    FailedConversion,
-    ErrorCategory,
     ConversionError,
+    ConversionReport,
+    ErrorCategory,
+    FailedConversion,
+    PartialConversion,
 )
-from .utils.file_utils import get_rpt_files, get_output_path, ensure_directory
+from .utils.file_utils import ensure_directory, get_output_path, get_rpt_files
+from .utils.logger import ConversionProgressTracker, get_logger
 
 
 @dataclass
@@ -253,14 +258,10 @@ class Pipeline:
         # Use parallel or sequential processing based on workers
         if workers > 1:
             self._process_parallel(
-                rpt_files, input_dir, output_dir, workers,
-                report, progress_callback
+                rpt_files, input_dir, output_dir, workers, report, progress_callback
             )
         else:
-            self._process_sequential(
-                rpt_files, input_dir, output_dir,
-                report, progress_callback
-            )
+            self._process_sequential(rpt_files, input_dir, output_dir, report, progress_callback)
 
         # Finalize report
         report.finalize()
@@ -278,9 +279,7 @@ class Pipeline:
         """Process files sequentially (single worker)."""
         with ConversionProgressTracker(len(rpt_files)) as progress:
             for rpt_file in rpt_files:
-                output_path = get_output_path(
-                    rpt_file, input_dir, output_dir, new_extension=".rdf"
-                )
+                output_path = get_output_path(rpt_file, input_dir, output_dir, new_extension=".rdf")
                 result = self.process_file(rpt_file, output_path)
                 progress.update(result.status, rpt_file.name)
                 self._record_result(result, report)
@@ -305,20 +304,16 @@ class Pipeline:
 
         def process_single(rpt_file: Path) -> PipelineResult:
             """Process a single file (runs in thread)."""
-            output_path = get_output_path(
-                rpt_file, input_dir, output_dir, new_extension=".rdf"
-            )
+            output_path = get_output_path(rpt_file, input_dir, output_dir, new_extension=".rdf")
             return self.process_file(rpt_file, output_path)
 
         with ConversionProgressTracker(
-            len(rpt_files),
-            description=f"Converting ({workers} workers)"
+            len(rpt_files), description=f"Converting ({workers} workers)"
         ) as progress:
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 # Submit all tasks
                 future_to_file = {
-                    executor.submit(process_single, rpt_file): rpt_file
-                    for rpt_file in rpt_files
+                    executor.submit(process_single, rpt_file): rpt_file for rpt_file in rpt_files
                 }
 
                 # Process completed tasks as they finish
@@ -359,28 +354,50 @@ class Pipeline:
             report.successful_files.append(str(result.rpt_path))
         elif result.status == "partial":
             report.partial += 1
-            report.partial_files.append(PartialConversion(
-                file_name=str(result.rpt_path),
-                rdf_path=str(result.rdf_path) if result.rdf_path else "",
-                warnings=[ConversionError(
-                    category=ErrorCategory.UNKNOWN_ERROR,
-                    message=w,
-                ) for w in result.warnings],
-                elements_converted=result.transformed_report.elements_converted if result.transformed_report else 0,
-                elements_with_issues=result.transformed_report.elements_with_issues if result.transformed_report else 0,
-                completion_percentage=result.transformed_report.completion_percentage if result.transformed_report else 0,
-            ))
+            report.partial_files.append(
+                PartialConversion(
+                    file_name=str(result.rpt_path),
+                    rdf_path=str(result.rdf_path) if result.rdf_path else "",
+                    warnings=[
+                        ConversionError(
+                            category=ErrorCategory.UNKNOWN_ERROR,
+                            message=w,
+                        )
+                        for w in result.warnings
+                    ],
+                    elements_converted=(
+                        result.transformed_report.elements_converted
+                        if result.transformed_report
+                        else 0
+                    ),
+                    elements_with_issues=(
+                        result.transformed_report.elements_with_issues
+                        if result.transformed_report
+                        else 0
+                    ),
+                    completion_percentage=(
+                        result.transformed_report.completion_percentage
+                        if result.transformed_report
+                        else 0
+                    ),
+                )
+            )
         else:
             report.failed += 1
-            report.failed_files.append(FailedConversion(
-                file_name=str(result.rpt_path),
-                errors=[ConversionError(
-                    category=ErrorCategory.UNKNOWN_ERROR,
-                    message=e,
-                    is_fatal=True,
-                ) for e in result.errors],
-                stage_failed=self._determine_failed_stage(result),
-            ))
+            report.failed_files.append(
+                FailedConversion(
+                    file_name=str(result.rpt_path),
+                    errors=[
+                        ConversionError(
+                            category=ErrorCategory.UNKNOWN_ERROR,
+                            message=e,
+                            is_fatal=True,
+                        )
+                        for e in result.errors
+                    ],
+                    stage_failed=self._determine_failed_stage(result),
+                )
+            )
 
     def _determine_failed_stage(self, result: PipelineResult) -> str:
         """Determine which stage failed based on result."""
@@ -474,14 +491,16 @@ class Pipeline:
                 if model.groups:
                     analysis["feature_usage"]["groups"] += 1
 
-                analysis["files"].append({
-                    "name": rpt_file.name,
-                    "complexity_score": score,
-                    "formulas": len(model.formulas),
-                    "parameters": len(model.parameters),
-                    "subreports": len(model.subreports),
-                    "groups": len(model.groups),
-                })
+                analysis["files"].append(
+                    {
+                        "name": rpt_file.name,
+                        "complexity_score": score,
+                        "formulas": len(model.formulas),
+                        "parameters": len(model.parameters),
+                        "subreports": len(model.subreports),
+                        "groups": len(model.groups),
+                    }
+                )
 
             except Exception as e:
                 self.logger.warning(f"Could not analyze {rpt_file.name}: {e}")

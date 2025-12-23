@@ -18,8 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from ..utils.error_handler import ConversionError, ErrorCategory
 from ..utils.logger import get_logger
-from ..utils.error_handler import ErrorCategory, ConversionError
 
 
 @dataclass
@@ -129,7 +129,9 @@ class RptExtractor:
         # Validate Java version requirements
         if self.extractor_type == "java":
             if not shutil.which("java"):
-                errors.append("Java runtime not found. Install Java 11+ to use RptToXml Java Edition.")
+                errors.append(
+                    "Java runtime not found. Install Java 11+ to use RptToXml Java Edition."
+                )
             else:
                 # Check for built JAR
                 jar_path = self.rpttoxml_path.parent / "target" / "RptToXml.jar"
@@ -141,7 +143,9 @@ class RptExtractor:
         # Validate .NET version requirements
         elif self.extractor_type == "dotnet":
             if platform.system() != "Windows":
-                errors.append("RptToXml .NET Edition requires Windows. Use Java Edition on macOS/Linux.")
+                errors.append(
+                    "RptToXml .NET Edition requires Windows. Use Java Edition on macOS/Linux."
+                )
 
         if not self.temp_dir.exists():
             try:
@@ -206,7 +210,8 @@ class RptExtractor:
         return ExtractionResult(
             rpt_path=rpt_file,
             success=False,
-            error=last_error or ConversionError(
+            error=last_error
+            or ConversionError(
                 category=ErrorCategory.EXTRACTION_FAILED,
                 message="Extraction failed after all retries",
                 is_fatal=True,
@@ -326,14 +331,15 @@ class RptExtractor:
         Returns:
             List of ExtractionResults.
         """
-        self.logger.info(f"Starting batch extraction of {len(rpt_files)} files with {workers} workers")
+        self.logger.info(
+            f"Starting batch extraction of {len(rpt_files)} files with {workers} workers"
+        )
         results: list[ExtractionResult] = []
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             # Submit all extraction tasks
             future_to_file = {
-                executor.submit(self.extract, rpt_file): rpt_file
-                for rpt_file in rpt_files
+                executor.submit(self.extract, rpt_file): rpt_file for rpt_file in rpt_files
             }
 
             # Collect results as they complete
@@ -489,9 +495,13 @@ class DockerRptExtractor(RptExtractor):
         # Build Docker command
         # Mount the RPT file directly to /app/<filename> and output dir to /reports/output
         cmd = [
-            "docker", "run", "--rm",
-            "-v", f"{rpt_file}:/app/{rpt_file.name}:ro",
-            "-v", f"{output_dir}:/reports/output",
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{rpt_file}:/app/{rpt_file.name}:ro",
+            "-v",
+            f"{output_dir}:/reports/output",
             self.docker_image,
             rpt_file.name,  # Just the filename, not full path
             f"/reports/output/{xml_path.name}",

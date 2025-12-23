@@ -4,13 +4,14 @@ Integration tests for FontMapper with LayoutMapper.
 Tests the complete font mapping flow from Crystal Reports to Oracle Reports.
 """
 
-import pytest
-from dataclasses import dataclass
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
+from src.parsing.report_model import Field, FontSpec, FormatSpec, Section, SectionType
 from src.transformation.layout_mapper import LayoutMapper
-from src.parsing.report_model import Section, Field, SectionType, FontSpec, FormatSpec
 
 
 class TestFontMapperIntegration:
@@ -62,13 +63,15 @@ class TestFontMapperIntegration:
                 font=FontSpec(name=font, size=size, bold=bold, italic=italic),
                 format=FormatSpec(),
             )
-            for i, (font, size, bold, italic) in enumerate([
-                ("Arial", 10, False, False),
-                ("Times New Roman", 12, True, False),
-                ("Courier New", 9, False, True),
-                ("Verdana", 11, True, True),
-                ("Comic Sans MS", 8, False, False),
-            ])
+            for i, (font, size, bold, italic) in enumerate(
+                [
+                    ("Arial", 10, False, False),
+                    ("Times New Roman", 12, True, False),
+                    ("Courier New", 9, False, True),
+                    ("Verdana", 11, True, True),
+                    ("Comic Sans MS", 8, False, False),
+                ]
+            )
         ]
 
         # Map all fields
@@ -93,15 +96,17 @@ class TestFontMapperIntegration:
     def test_layout_mapper_with_custom_font_config(self):
         """Test LayoutMapper with custom font configuration."""
         # Create a temporary config file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write("""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(
+                """
 fonts:
   "MyCustomFont": "Courier"
   "AnotherFont": "Times"
 
 default_font: "Helvetica"
 default_size: 11
-""")
+"""
+            )
             config_path = f.name
 
         try:

@@ -8,8 +8,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
-from ..parsing.report_model import Formula, DataType, FormulaSyntax
-from ..utils.error_handler import ErrorHandler, ErrorCategory, ConversionError
+from ..parsing.report_model import DataType, Formula, FormulaSyntax
+from ..utils.error_handler import ConversionError, ErrorCategory, ErrorHandler
 from ..utils.logger import get_logger
 
 
@@ -72,7 +72,6 @@ class FormulaTranslator:
         "strreverse": ("REVERSE({0})", 1),
         "strcmp": ("CASE WHEN {0} < {1} THEN -1 WHEN {0} > {1} THEN 1 ELSE 0 END", 2),
         "propercase": ("INITCAP({0})", 1),
-
         # Date functions
         "currentdate": ("TRUNC(SYSDATE)", 0),
         "currentdatetime": ("SYSTIMESTAMP", 0),
@@ -93,11 +92,9 @@ class FormulaTranslator:
         "now": ("SYSDATE", 0),
         "today": ("TRUNC(SYSDATE)", 0),
         "timer": ("(SYSDATE - TRUNC(SYSDATE)) * 86400", 0),
-
         # Date arithmetic
         "dateadd": ("({1} + NUMTODSINTERVAL({2}, '{0}'))", 3),  # Special handling needed
         "datediff": ("({2} - {1})", 3),  # Returns days; interval type ignored
-
         # Numeric functions
         "abs": ("ABS({0})", 1),
         "round": ("ROUND({0}, {1})", 2),
@@ -116,7 +113,6 @@ class FormulaTranslator:
         "power": ("POWER({0}, {1})", 2),
         "ceiling": ("CEIL({0})", 1),
         "floor": ("FLOOR({0})", 1),
-
         # Trigonometric functions
         "sin": ("SIN({0})", 1),
         "cos": ("COS({0})", 1),
@@ -125,7 +121,6 @@ class FormulaTranslator:
         "acos": ("ACOS({0})", 1),
         "atan": ("ATAN({0})", 1),
         "atn": ("ATAN({0})", 1),
-
         # Conversion functions
         "totext": ("TO_CHAR({0})", 1),
         "tonumber": ("TO_NUMBER({0})", 1),
@@ -134,17 +129,14 @@ class FormulaTranslator:
         "cdbl": ("TO_NUMBER({0})", 1),
         "cdate": ("TO_DATE({0})", 1),
         "cbool": ("CASE WHEN {0} THEN 'Y' ELSE 'N' END", 1),
-
         # Null handling
         "isnull": ("({0} IS NULL)", 1),
         "isnothing": ("({0} IS NULL)", 1),
         "nv": ("NVL({0}, {1})", 2),  # Crystal's null value function
-
         # Logical functions
         "iif": ("CASE WHEN {0} THEN {1} ELSE {2} END", 3),
         "switch": (None, -1),  # Special handling
         "choose": (None, -1),  # Special handling
-
         # Aggregate functions (for reference in formulas)
         "sum": ("SUM({0})", 1),
         "avg": ("AVG({0})", 1),
@@ -221,9 +213,7 @@ class FormulaTranslator:
 
             # Build function body
             return_type = self._get_return_type(formula.return_type)
-            plsql_code = self._build_function_body(
-                oracle_name, return_type, plsql_expr
-            )
+            plsql_code = self._build_function_body(oracle_name, return_type, plsql_expr)
 
             # Extract column references
             columns = self._extract_column_references(plsql_expr)
@@ -376,6 +366,7 @@ class FormulaTranslator:
 
         {Table.Field} -> FIELD_NAME or TABLE_FIELD
         """
+
         def replace_field(match):
             field_ref = match.group(1)
             # Remove table prefix and convert to uppercase
@@ -397,6 +388,7 @@ class FormulaTranslator:
 
         @FormulaName or {@FormulaName} -> CF_FORMULANAME()
         """
+
         def replace_formula(match):
             formula_name = match.group(1)
             oracle_name = self._make_oracle_name(formula_name)
@@ -415,6 +407,7 @@ class FormulaTranslator:
 
         ?ParamName or {?ParamName} -> :P_PARAMNAME
         """
+
         def replace_param(match):
             param_name = match.group(1)
             oracle_name = f"P_{param_name.upper().replace(' ', '_')}"
@@ -476,7 +469,7 @@ class FormulaTranslator:
 
         while i < n:
             # Look for function name followed by (
-            match = re.match(r'(\w+)\s*\(', expression[i:])
+            match = re.match(r"(\w+)\s*\(", expression[i:])
             if match:
                 func_name = match.group(1)
                 func_start = i
@@ -486,15 +479,15 @@ class FormulaTranslator:
                 depth = 1
                 j = paren_start + 1
                 while j < n and depth > 0:
-                    if expression[j] == '(':
+                    if expression[j] == "(":
                         depth += 1
-                    elif expression[j] == ')':
+                    elif expression[j] == ")":
                         depth -= 1
                     j += 1
 
                 if depth == 0:
                     # Found matching )
-                    args_str = expression[paren_start + 1:j - 1]
+                    args_str = expression[paren_start + 1 : j - 1]
                     converted = self._convert_single_function(func_name, args_str, warnings)
                     result.append(converted)
                     i = j
@@ -506,7 +499,7 @@ class FormulaTranslator:
                 result.append(expression[i])
                 i += 1
 
-        return ''.join(result)
+        return "".join(result)
 
     def _convert_single_function(self, func_name: str, args_str: str, warnings: list[str]) -> str:
         """Convert a single Crystal function call to Oracle equivalent."""
@@ -550,7 +543,18 @@ class FormulaTranslator:
                 return f"{func_name}({converted_args_str})"
 
         # Unknown function - pass through but warn
-        if func_lower not in ["sum", "avg", "count", "max", "min", "case", "when", "then", "else", "end"]:
+        if func_lower not in [
+            "sum",
+            "avg",
+            "count",
+            "max",
+            "min",
+            "case",
+            "when",
+            "then",
+            "else",
+            "end",
+        ]:
             warnings.append(f"Unknown function '{func_name}' - passed through")
         return f"{func_name}({converted_args_str})"
 
@@ -732,9 +736,7 @@ end {oracle_name};"""
             return_type=return_type,
             success=True,
             is_placeholder=True,
-            warnings=[
-                f"Created placeholder - manual conversion required: {error_message}"
-            ],
+            warnings=[f"Created placeholder - manual conversion required: {error_message}"],
         )
 
     def _extract_column_references(self, expression: str) -> list[str]:

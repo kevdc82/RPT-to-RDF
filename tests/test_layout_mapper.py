@@ -5,20 +5,21 @@ Tests the conversion of Crystal Reports layout to Oracle Reports layout.
 """
 
 import pytest
-from src.transformation.layout_mapper import (
-    LayoutMapper,
-    OracleLayout,
-    OracleFrame,
-    OracleField,
-    CoordinateConverter,
-)
+
 from src.parsing.report_model import (
-    Section,
     Field,
-    Group,
-    SectionType,
     FontSpec,
     FormatSpec,
+    Group,
+    Section,
+    SectionType,
+)
+from src.transformation.layout_mapper import (
+    CoordinateConverter,
+    LayoutMapper,
+    OracleField,
+    OracleFrame,
+    OracleLayout,
 )
 
 
@@ -34,7 +35,7 @@ class TestOracleField:
             x=10.0,
             y=20.0,
             width=150.0,
-            height=14.0
+            height=14.0,
         )
         assert field.name == "F_CUSTOMER_NAME"
         assert field.source == "CUSTOMER_NAME"
@@ -43,12 +44,7 @@ class TestOracleField:
 
     def test_oracle_field_to_dict(self):
         """Test converting OracleField to dictionary."""
-        field = OracleField(
-            name="F_TEST",
-            source="TEST_COLUMN",
-            x=5.0,
-            y=10.0
-        )
+        field = OracleField(name="F_TEST", source="TEST_COLUMN", x=5.0, y=10.0)
         result = field.to_dict()
         assert result["name"] == "F_TEST"
         assert result["source"] == "TEST_COLUMN"
@@ -58,11 +54,7 @@ class TestOracleField:
     def test_oracle_field_font_properties(self):
         """Test OracleField font properties."""
         field = OracleField(
-            name="F_TITLE",
-            source="TITLE",
-            font_name="Arial",
-            font_size=12,
-            font_style="bold"
+            name="F_TITLE", source="TITLE", font_name="Arial", font_size=12, font_style="bold"
         )
         assert field.font_name == "Arial"
         assert field.font_size == 12
@@ -74,7 +66,7 @@ class TestOracleField:
             name="F_AMOUNT",
             source="AMOUNT",
             horizontal_alignment="end",
-            vertical_alignment="center"
+            vertical_alignment="center",
         )
         assert field.horizontal_alignment == "end"
         assert field.vertical_alignment == "center"
@@ -85,12 +77,7 @@ class TestOracleFrame:
 
     def test_oracle_frame_creation(self):
         """Test creating an OracleFrame."""
-        frame = OracleFrame(
-            name="M_HEADER",
-            frame_type="header",
-            width=600.0,
-            height=50.0
-        )
+        frame = OracleFrame(name="M_HEADER", frame_type="header", width=600.0, height=50.0)
         assert frame.name == "M_HEADER"
         assert frame.frame_type == "header"
         assert frame.width == 600.0
@@ -120,11 +107,7 @@ class TestOracleFrame:
 
     def test_oracle_frame_to_dict(self):
         """Test converting OracleFrame to dictionary."""
-        frame = OracleFrame(
-            name="R_GROUP",
-            frame_type="repeating",
-            source_group="G_CUSTOMER"
-        )
+        frame = OracleFrame(name="R_GROUP", frame_type="repeating", source_group="G_CUSTOMER")
         result = frame.to_dict()
         assert result["name"] == "R_GROUP"
         assert result["frame_type"] == "repeating"
@@ -136,11 +119,7 @@ class TestOracleLayout:
 
     def test_oracle_layout_creation(self):
         """Test creating an OracleLayout."""
-        layout = OracleLayout(
-            page_width=612.0,
-            page_height=792.0,
-            orientation="portrait"
-        )
+        layout = OracleLayout(page_width=612.0, page_height=792.0, orientation="portrait")
         assert layout.page_width == 612.0
         assert layout.page_height == 792.0
         assert layout.orientation == "portrait"
@@ -148,10 +127,7 @@ class TestOracleLayout:
     def test_oracle_layout_margins(self):
         """Test OracleLayout margin settings."""
         layout = OracleLayout(
-            left_margin=72.0,
-            right_margin=72.0,
-            top_margin=72.0,
-            bottom_margin=72.0
+            left_margin=72.0, right_margin=72.0, top_margin=72.0, bottom_margin=72.0
         )
         assert layout.left_margin == 72.0
         assert layout.top_margin == 72.0
@@ -171,10 +147,7 @@ class TestLayoutMapper:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.mapper = LayoutMapper(
-            field_prefix="F_",
-            coordinate_unit="points"
-        )
+        self.mapper = LayoutMapper(field_prefix="F_", coordinate_unit="points")
 
     # Field mapping tests
     def test_map_simple_field(self):
@@ -192,7 +165,7 @@ class TestLayoutMapper:
             width=150.0,
             height=14.0,
             font=FontSpec(name="Arial", size=10),
-            format=FormatSpec(horizontal_alignment="left")
+            format=FormatSpec(horizontal_alignment="left"),
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -213,7 +186,7 @@ class TestLayoutMapper:
             x=0.0,
             y=0.0,
             width=100.0,
-            height=14.0
+            height=14.0,
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -230,7 +203,7 @@ class TestLayoutMapper:
             x=0.0,
             y=0.0,
             width=100.0,
-            height=14.0
+            height=14.0,
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -241,9 +214,7 @@ class TestLayoutMapper:
     def test_map_field_with_bold_font(self):
         """Test mapping field with bold font."""
         crystal_field = Field(
-            name="BoldField",
-            source="Title",
-            font=FontSpec(bold=True, italic=False)
+            name="BoldField", source="Title", font=FontSpec(bold=True, italic=False)
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -253,9 +224,7 @@ class TestLayoutMapper:
     def test_map_field_with_italic_font(self):
         """Test mapping field with italic font."""
         crystal_field = Field(
-            name="ItalicField",
-            source="Subtitle",
-            font=FontSpec(bold=False, italic=True)
+            name="ItalicField", source="Subtitle", font=FontSpec(bold=False, italic=True)
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -265,9 +234,7 @@ class TestLayoutMapper:
     def test_map_field_with_bold_italic_font(self):
         """Test mapping field with bold and italic font."""
         crystal_field = Field(
-            name="BoldItalicField",
-            source="Header",
-            font=FontSpec(bold=True, italic=True)
+            name="BoldItalicField", source="Header", font=FontSpec(bold=True, italic=True)
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -277,9 +244,7 @@ class TestLayoutMapper:
     def test_map_field_alignment_left(self):
         """Test mapping field with left alignment."""
         crystal_field = Field(
-            name="LeftField",
-            source="Name",
-            format=FormatSpec(horizontal_alignment="left")
+            name="LeftField", source="Name", format=FormatSpec(horizontal_alignment="left")
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -289,9 +254,7 @@ class TestLayoutMapper:
     def test_map_field_alignment_center(self):
         """Test mapping field with center alignment."""
         crystal_field = Field(
-            name="CenterField",
-            source="Title",
-            format=FormatSpec(horizontal_alignment="center")
+            name="CenterField", source="Title", format=FormatSpec(horizontal_alignment="center")
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -301,9 +264,7 @@ class TestLayoutMapper:
     def test_map_field_alignment_right(self):
         """Test mapping field with right alignment."""
         crystal_field = Field(
-            name="RightField",
-            source="Amount",
-            format=FormatSpec(horizontal_alignment="right")
+            name="RightField", source="Amount", format=FormatSpec(horizontal_alignment="right")
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -313,9 +274,7 @@ class TestLayoutMapper:
     def test_map_field_with_format_string(self):
         """Test mapping field with format string."""
         crystal_field = Field(
-            name="FormattedField",
-            source="Amount",
-            format=FormatSpec(format_string="#,##0.00")
+            name="FormattedField", source="Amount", format=FormatSpec(format_string="#,##0.00")
         )
 
         oracle_field = self.mapper._map_field(crystal_field)
@@ -333,7 +292,7 @@ class TestLayoutMapper:
             name="ReportHeader",
             section_type=SectionType.REPORT_HEADER,
             height=50.0,  # twips
-            fields=[]
+            fields=[],
         )
 
         frame = self.mapper._map_section(section, 600.0, [])
@@ -345,10 +304,7 @@ class TestLayoutMapper:
     def test_map_section_page_header(self):
         """Test mapping page header section."""
         section = Section(
-            name="PageHeader",
-            section_type=SectionType.PAGE_HEADER,
-            height=30.0,
-            fields=[]
+            name="PageHeader", section_type=SectionType.PAGE_HEADER, height=30.0, fields=[]
         )
 
         frame = self.mapper._map_section(section, 600.0, [])
@@ -358,12 +314,7 @@ class TestLayoutMapper:
 
     def test_map_section_detail(self):
         """Test mapping detail section."""
-        section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=[]
-        )
+        section = Section(name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[])
 
         frame = self.mapper._map_section(section, 600.0, [])
 
@@ -376,10 +327,7 @@ class TestLayoutMapper:
         field2 = Field(name="Field2", source="Col2")
 
         section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=[field1, field2]
+            name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[field1, field2]
         )
 
         frame = self.mapper._map_section(section, 600.0, [])
@@ -395,7 +343,7 @@ class TestLayoutMapper:
             section_type=SectionType.GROUP_HEADER,
             group_number=1,
             height=25.0,
-            fields=[]
+            fields=[],
         )
 
         frame = self.mapper._map_section(section, 600.0, [group])
@@ -407,23 +355,12 @@ class TestLayoutMapper:
         """Test mapping a simple layout with basic sections."""
         sections = [
             Section(
-                name="PageHeader",
-                section_type=SectionType.PAGE_HEADER,
-                height=30.0,
-                fields=[]
+                name="PageHeader", section_type=SectionType.PAGE_HEADER, height=30.0, fields=[]
             ),
+            Section(name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[]),
             Section(
-                name="Detail",
-                section_type=SectionType.DETAIL,
-                height=20.0,
-                fields=[]
+                name="PageFooter", section_type=SectionType.PAGE_FOOTER, height=25.0, fields=[]
             ),
-            Section(
-                name="PageFooter",
-                section_type=SectionType.PAGE_FOOTER,
-                height=25.0,
-                fields=[]
-            )
         ]
 
         layout = self.mapper.map_layout(sections, [], 612.0, 792.0)
@@ -444,21 +381,16 @@ class TestLayoutMapper:
                 section_type=SectionType.GROUP_HEADER,
                 group_number=1,
                 height=25.0,
-                fields=[]
+                fields=[],
             ),
-            Section(
-                name="Detail",
-                section_type=SectionType.DETAIL,
-                height=20.0,
-                fields=[]
-            ),
+            Section(name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[]),
             Section(
                 name="GroupFooter1",
                 section_type=SectionType.GROUP_FOOTER,
                 group_number=1,
                 height=25.0,
-                fields=[]
-            )
+                fields=[],
+            ),
         ]
 
         layout = self.mapper.map_layout(sections, [group], 612.0, 792.0)
@@ -477,21 +409,16 @@ class TestLayoutMapper:
                 section_type=SectionType.GROUP_HEADER,
                 group_number=1,
                 height=25.0,
-                fields=[]
+                fields=[],
             ),
             Section(
                 name="GroupHeader2",
                 section_type=SectionType.GROUP_HEADER,
                 group_number=2,
                 height=20.0,
-                fields=[]
+                fields=[],
             ),
-            Section(
-                name="Detail",
-                section_type=SectionType.DETAIL,
-                height=15.0,
-                fields=[]
-            )
+            Section(name="Detail", section_type=SectionType.DETAIL, height=15.0, fields=[]),
         ]
 
         layout = self.mapper.map_layout(sections, [group1, group2], 612.0, 792.0)
@@ -504,23 +431,12 @@ class TestLayoutMapper:
         """Test mapping layout with report headers and footers."""
         sections = [
             Section(
-                name="ReportHeader",
-                section_type=SectionType.REPORT_HEADER,
-                height=40.0,
-                fields=[]
+                name="ReportHeader", section_type=SectionType.REPORT_HEADER, height=40.0, fields=[]
             ),
+            Section(name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[]),
             Section(
-                name="Detail",
-                section_type=SectionType.DETAIL,
-                height=20.0,
-                fields=[]
+                name="ReportFooter", section_type=SectionType.REPORT_FOOTER, height=35.0, fields=[]
             ),
-            Section(
-                name="ReportFooter",
-                section_type=SectionType.REPORT_FOOTER,
-                height=35.0,
-                fields=[]
-            )
         ]
 
         layout = self.mapper.map_layout(sections, [], 612.0, 792.0)
@@ -616,16 +532,14 @@ class TestLayoutMapperEdgeCases:
         oracle_field = self.mapper._map_field(field)
 
         # Special chars should be handled (replaced or removed)
-        assert oracle_field.name.replace("_", "").replace("F", "").isalnum() or "_" in oracle_field.name
+        assert (
+            oracle_field.name.replace("_", "").replace("F", "").isalnum()
+            or "_" in oracle_field.name
+        )
 
     def test_section_zero_height(self):
         """Test section with zero height."""
-        section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=0.0,
-            fields=[]
-        )
+        section = Section(name="Detail", section_type=SectionType.DETAIL, height=0.0, fields=[])
 
         frame = self.mapper._map_section(section, 600.0, [])
 
@@ -638,10 +552,7 @@ class TestLayoutMapperEdgeCases:
         1000 twips = 50 points.
         """
         section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=1000.0,  # twips
-            fields=[]
+            name="Detail", section_type=SectionType.DETAIL, height=1000.0, fields=[]  # twips
         )
 
         frame = self.mapper._map_section(section, 600.0, [])
@@ -651,14 +562,7 @@ class TestLayoutMapperEdgeCases:
 
     def test_layout_custom_page_size(self):
         """Test layout with custom page size."""
-        sections = [
-            Section(
-                name="Detail",
-                section_type=SectionType.DETAIL,
-                height=20.0,
-                fields=[]
-            )
-        ]
+        sections = [Section(name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=[])]
 
         layout = self.mapper.map_layout(sections, [], 842.0, 595.0)  # A4 landscape
 
@@ -667,11 +571,7 @@ class TestLayoutMapperEdgeCases:
 
     def test_field_with_suppress_condition(self):
         """Test field with suppress condition."""
-        field = Field(
-            name="ConditionalField",
-            source="FIELD",
-            suppress_condition="{Field} = 0"
-        )
+        field = Field(name="ConditionalField", source="FIELD", suppress_condition="{Field} = 0")
 
         oracle_field = self.mapper._map_field(field)
 
@@ -680,11 +580,7 @@ class TestLayoutMapperEdgeCases:
 
     def test_field_without_suppress_condition(self):
         """Test field without suppress condition."""
-        field = Field(
-            name="VisibleField",
-            source="FIELD",
-            suppress_condition=None
-        )
+        field = Field(name="VisibleField", source="FIELD", suppress_condition=None)
 
         oracle_field = self.mapper._map_field(field)
 
@@ -692,18 +588,8 @@ class TestLayoutMapperEdgeCases:
 
     def test_frame_counter_increments(self):
         """Test that frame counter increments."""
-        section1 = Section(
-            name="Section1",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=[]
-        )
-        section2 = Section(
-            name="Section2",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=[]
-        )
+        section1 = Section(name="Section1", section_type=SectionType.DETAIL, height=20.0, fields=[])
+        section2 = Section(name="Section2", section_type=SectionType.DETAIL, height=20.0, fields=[])
 
         frame1 = self.mapper._map_section(section1, 600.0, [])
         frame2 = self.mapper._map_section(section2, 600.0, [])
@@ -714,19 +600,13 @@ class TestLayoutMapperEdgeCases:
     def test_vertical_alignment_mapping(self):
         """Test vertical alignment mapping."""
         field_top = Field(
-            name="TopField",
-            source="FIELD",
-            format=FormatSpec(vertical_alignment="top")
+            name="TopField", source="FIELD", format=FormatSpec(vertical_alignment="top")
         )
         field_middle = Field(
-            name="MiddleField",
-            source="FIELD",
-            format=FormatSpec(vertical_alignment="middle")
+            name="MiddleField", source="FIELD", format=FormatSpec(vertical_alignment="middle")
         )
         field_bottom = Field(
-            name="BottomField",
-            source="FIELD",
-            format=FormatSpec(vertical_alignment="bottom")
+            name="BottomField", source="FIELD", format=FormatSpec(vertical_alignment="bottom")
         )
 
         oracle_top = self.mapper._map_field(field_top)
@@ -739,11 +619,7 @@ class TestLayoutMapperEdgeCases:
 
     def test_table_prefix_removal(self):
         """Test that table prefix is removed from field source."""
-        field = Field(
-            name="CustomerField",
-            source="Customers.CustomerName",
-            source_type="database"
-        )
+        field = Field(name="CustomerField", source="Customers.CustomerName", source_type="database")
 
         oracle_field = self.mapper._map_field(field)
 

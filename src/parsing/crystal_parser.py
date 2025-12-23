@@ -9,32 +9,32 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ..utils.error_handler import ErrorCategory, ErrorHandler
+from ..utils.logger import get_logger
 from .report_model import (
-    ReportModel,
-    DataSource,
-    Query,
-    QueryColumn,
-    Formula,
-    Parameter,
-    Section,
-    Field,
-    Group,
-    SubreportReference,
     Chart,
-    ChartType,
     ChartDataSeries,
+    ChartType,
+    ConnectionType,
     CrossTab,
     CrossTabCell,
-    ReportMetadata,
+    DataSource,
+    DataType,
+    Field,
     FontSpec,
     FormatSpec,
-    SectionType,
+    Formula,
     FormulaSyntax,
-    DataType,
-    ConnectionType,
+    Group,
+    Parameter,
+    Query,
+    QueryColumn,
+    ReportMetadata,
+    ReportModel,
+    Section,
+    SectionType,
+    SubreportReference,
 )
-from ..utils.logger import get_logger
-from ..utils.error_handler import ErrorHandler, ErrorCategory
 
 
 class CrystalParser:
@@ -238,9 +238,7 @@ class CrystalParser:
 
                 # Determine connection type
                 conn_type = conn_elem.get("Type", "").lower()
-                ds.connection_type = self.CONNECTION_TYPE_MAP.get(
-                    conn_type, ConnectionType.UNKNOWN
-                )
+                ds.connection_type = self.CONNECTION_TYPE_MAP.get(conn_type, ConnectionType.UNKNOWN)
 
                 model.data_sources.append(ds)
 
@@ -266,12 +264,16 @@ class CrystalParser:
         # Also check tables for their fields to build query columns
         for table_elem in root.findall(".//Table"):
             # Use alias if available, otherwise use name
-            table_name = table_elem.get("alias") or table_elem.get("Name") or table_elem.get("name") or ""
+            table_name = (
+                table_elem.get("alias") or table_elem.get("Name") or table_elem.get("name") or ""
+            )
 
             for field_elem in table_elem.findall(".//Field"):
                 field_name = field_elem.get("Name", "") or field_elem.get("name", "")
                 # Try both Type and valueType attributes (different XML formats)
-                field_type = (field_elem.get("Type") or field_elem.get("valueType") or "String").lower()
+                field_type = (
+                    field_elem.get("Type") or field_elem.get("valueType") or "String"
+                ).lower()
 
                 col = QueryColumn(
                     name=field_name,
@@ -294,7 +296,9 @@ class CrystalParser:
         if formulas_elem is None:
             return
 
-        for formula_elem in formulas_elem.findall(".//Formula") or formulas_elem.findall(".//FormulaField"):
+        for formula_elem in formulas_elem.findall(".//Formula") or formulas_elem.findall(
+            ".//FormulaField"
+        ):
             name = formula_elem.get("Name", "")
             if not name:
                 continue
@@ -334,7 +338,9 @@ class CrystalParser:
         if params_elem is None:
             return
 
-        for param_elem in params_elem.findall(".//Parameter") or params_elem.findall(".//ParameterField"):
+        for param_elem in params_elem.findall(".//Parameter") or params_elem.findall(
+            ".//ParameterField"
+        ):
             name = param_elem.get("Name", "")
             if not name:
                 continue
@@ -408,7 +414,9 @@ class CrystalParser:
         for section_elem in sections_elem.findall(".//Section"):
             self._parse_single_section(section_elem, model)
 
-    def _parse_single_section(self, section_elem: ET.Element, model: ReportModel, area_kind: str = "") -> None:
+    def _parse_single_section(
+        self, section_elem: ET.Element, model: ReportModel, area_kind: str = ""
+    ) -> None:
         """Parse a single section element."""
         section_type_str = section_elem.get("Type", "").lower() or area_kind
         section_type = self.SECTION_TYPE_MAP.get(section_type_str)
@@ -805,7 +813,9 @@ class CrystalParser:
         for cell_elem in elem.findall(".//SummaryField") + elem.findall(".//Cell"):
             cell_name = cell_elem.get("Name", f"Cell_{len(crosstab.summary_cells) + 1}")
             field_name = cell_elem.get("FieldName", cell_elem.get("Field", ""))
-            summary_type_str = cell_elem.get("SummaryType", cell_elem.get("Operation", "sum")).lower()
+            summary_type_str = cell_elem.get(
+                "SummaryType", cell_elem.get("Operation", "sum")
+            ).lower()
             summary_type = summary_type_map.get(summary_type_str, "sum")
 
             cell = CrossTabCell(

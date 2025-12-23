@@ -5,8 +5,9 @@ Tests the conversion of Crystal Reports formulas to Oracle PL/SQL.
 """
 
 import pytest
+
+from src.parsing.report_model import DataType, Formula, FormulaSyntax
 from src.transformation.formula_translator import FormulaTranslator, TranslatedFormula
-from src.parsing.report_model import Formula, DataType, FormulaSyntax
 
 
 class TestFormulaTranslator:
@@ -14,18 +15,13 @@ class TestFormulaTranslator:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.translator = FormulaTranslator(
-            formula_prefix="CF_",
-            on_unsupported="placeholder"
-        )
+        self.translator = FormulaTranslator(formula_prefix="CF_", on_unsupported="placeholder")
 
     # String function tests
     def test_left_function(self):
         """Test LEFT string function conversion."""
         formula = Formula(
-            name="TestLeft",
-            expression="Left({Field}, 5)",
-            return_type=DataType.STRING
+            name="TestLeft", expression="Left({Field}, 5)", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -34,9 +30,7 @@ class TestFormulaTranslator:
     def test_right_function(self):
         """Test RIGHT string function conversion."""
         formula = Formula(
-            name="TestRight",
-            expression="Right({Field}, 5)",
-            return_type=DataType.STRING
+            name="TestRight", expression="Right({Field}, 5)", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -45,9 +39,7 @@ class TestFormulaTranslator:
     def test_mid_function(self):
         """Test MID string function conversion."""
         formula = Formula(
-            name="TestMid",
-            expression="Mid({Field}, 2, 10)",
-            return_type=DataType.STRING
+            name="TestMid", expression="Mid({Field}, 2, 10)", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -55,11 +47,7 @@ class TestFormulaTranslator:
 
     def test_trim_function(self):
         """Test TRIM string function conversion."""
-        formula = Formula(
-            name="TestTrim",
-            expression="Trim({Field})",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestTrim", expression="Trim({Field})", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert "TRIM(:FIELD)" in result.plsql_code
@@ -67,9 +55,7 @@ class TestFormulaTranslator:
     def test_upper_function(self):
         """Test UPPER string function conversion."""
         formula = Formula(
-            name="TestUpper",
-            expression="Upper({Field})",
-            return_type=DataType.STRING
+            name="TestUpper", expression="Upper({Field})", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -78,9 +64,7 @@ class TestFormulaTranslator:
     def test_lower_function(self):
         """Test LOWER string function conversion."""
         formula = Formula(
-            name="TestLower",
-            expression="Lower({Field})",
-            return_type=DataType.STRING
+            name="TestLower", expression="Lower({Field})", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -88,11 +72,7 @@ class TestFormulaTranslator:
 
     def test_length_function(self):
         """Test LENGTH string function conversion."""
-        formula = Formula(
-            name="TestLen",
-            expression="Len({Field})",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestLen", expression="Len({Field})", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "LENGTH(:FIELD)" in result.plsql_code
@@ -102,7 +82,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestReplace",
             expression="Replace({Field}, 'old', 'new')",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -111,11 +91,7 @@ class TestFormulaTranslator:
     # Date function tests
     def test_current_date(self):
         """Test CurrentDate function conversion."""
-        formula = Formula(
-            name="TestCurDate",
-            expression="CurrentDate",
-            return_type=DataType.DATE
-        )
+        formula = Formula(name="TestCurDate", expression="CurrentDate", return_type=DataType.DATE)
         result = self.translator.translate(formula)
         assert result.success
         assert "TRUNC(SYSDATE)" in result.plsql_code
@@ -123,9 +99,7 @@ class TestFormulaTranslator:
     def test_current_datetime(self):
         """Test CurrentDateTime function conversion."""
         formula = Formula(
-            name="TestCurDateTime",
-            expression="CurrentDateTime",
-            return_type=DataType.DATETIME
+            name="TestCurDateTime", expression="CurrentDateTime", return_type=DataType.DATETIME
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -133,11 +107,7 @@ class TestFormulaTranslator:
 
     def test_current_time(self):
         """Test CurrentTime function conversion."""
-        formula = Formula(
-            name="TestCurTime",
-            expression="CurrentTime",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestCurTime", expression="CurrentTime", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert "TO_CHAR(SYSDATE, 'HH24:MI:SS')" in result.plsql_code
@@ -145,9 +115,7 @@ class TestFormulaTranslator:
     def test_year_function(self):
         """Test YEAR date function conversion."""
         formula = Formula(
-            name="TestYear",
-            expression="Year({DateField})",
-            return_type=DataType.NUMBER
+            name="TestYear", expression="Year({DateField})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -156,9 +124,7 @@ class TestFormulaTranslator:
     def test_month_function(self):
         """Test MONTH date function conversion."""
         formula = Formula(
-            name="TestMonth",
-            expression="Month({DateField})",
-            return_type=DataType.NUMBER
+            name="TestMonth", expression="Month({DateField})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -167,9 +133,7 @@ class TestFormulaTranslator:
     def test_day_function(self):
         """Test DAY date function conversion."""
         formula = Formula(
-            name="TestDay",
-            expression="Day({DateField})",
-            return_type=DataType.NUMBER
+            name="TestDay", expression="Day({DateField})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -178,11 +142,7 @@ class TestFormulaTranslator:
     # Numeric function tests
     def test_abs_function(self):
         """Test ABS numeric function conversion."""
-        formula = Formula(
-            name="TestAbs",
-            expression="Abs({Amount})",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestAbs", expression="Abs({Amount})", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "ABS(:AMOUNT)" in result.plsql_code
@@ -190,9 +150,7 @@ class TestFormulaTranslator:
     def test_round_function(self):
         """Test ROUND numeric function conversion."""
         formula = Formula(
-            name="TestRound",
-            expression="Round({Amount}, 2)",
-            return_type=DataType.NUMBER
+            name="TestRound", expression="Round({Amount}, 2)", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -201,9 +159,7 @@ class TestFormulaTranslator:
     def test_truncate_function(self):
         """Test TRUNCATE numeric function conversion."""
         formula = Formula(
-            name="TestTrunc",
-            expression="Truncate({Amount}, 0)",
-            return_type=DataType.NUMBER
+            name="TestTrunc", expression="Truncate({Amount}, 0)", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -212,9 +168,7 @@ class TestFormulaTranslator:
     def test_mod_function(self):
         """Test MOD numeric function conversion."""
         formula = Formula(
-            name="TestMod",
-            expression="Mod({Value}, 10)",
-            return_type=DataType.NUMBER
+            name="TestMod", expression="Mod({Value}, 10)", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -226,7 +180,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestIIF",
             expression="IIF({Amount} > 100, 'High', 'Low')",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -240,7 +194,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestNestedIIF",
             expression="IIF({A} > 1, 'X', IIF({B} > 2, 'Y', 'Z'))",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -253,7 +207,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestIIFNumeric",
             expression="IIF({Status} = 'Active', 1, 0)",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -262,11 +216,7 @@ class TestFormulaTranslator:
     # Field reference tests
     def test_field_reference_simple(self):
         """Test simple field reference conversion."""
-        formula = Formula(
-            name="TestFieldRef",
-            expression="{Field}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestFieldRef", expression="{Field}", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert ":FIELD" in result.plsql_code
@@ -275,9 +225,7 @@ class TestFormulaTranslator:
     def test_field_reference_with_table(self):
         """Test field reference with table prefix."""
         formula = Formula(
-            name="TestTableField",
-            expression="{Table.Field}",
-            return_type=DataType.STRING
+            name="TestTableField", expression="{Table.Field}", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -286,9 +234,7 @@ class TestFormulaTranslator:
     def test_field_reference_with_spaces(self):
         """Test field reference with spaces in name."""
         formula = Formula(
-            name="TestSpacedField",
-            expression="{Customer Name}",
-            return_type=DataType.STRING
+            name="TestSpacedField", expression="{Customer Name}", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -298,9 +244,7 @@ class TestFormulaTranslator:
     def test_formula_reference_with_at(self):
         """Test formula reference with @ prefix."""
         formula = Formula(
-            name="TestFormulaRef",
-            expression="@MyFormula",
-            return_type=DataType.STRING
+            name="TestFormulaRef", expression="@MyFormula", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -309,9 +253,7 @@ class TestFormulaTranslator:
     def test_formula_reference_in_braces(self):
         """Test formula reference in braces."""
         formula = Formula(
-            name="TestFormulaRefBraces",
-            expression="{@MyFormula}",
-            return_type=DataType.STRING
+            name="TestFormulaRefBraces", expression="{@MyFormula}", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -320,9 +262,7 @@ class TestFormulaTranslator:
     def test_formula_reference_with_field(self):
         """Test formula combining field and formula reference."""
         formula = Formula(
-            name="TestCombined",
-            expression="{Amount} + @Discount",
-            return_type=DataType.NUMBER
+            name="TestCombined", expression="{Amount} + @Discount", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -332,22 +272,14 @@ class TestFormulaTranslator:
     # Parameter reference tests
     def test_parameter_reference(self):
         """Test parameter reference conversion."""
-        formula = Formula(
-            name="TestParam",
-            expression="{?StartDate}",
-            return_type=DataType.DATE
-        )
+        formula = Formula(name="TestParam", expression="{?StartDate}", return_type=DataType.DATE)
         result = self.translator.translate(formula)
         assert result.success
         assert ":P_STARTDATE" in result.plsql_code
 
     def test_parameter_reference_without_braces(self):
         """Test parameter reference without braces."""
-        formula = Formula(
-            name="TestParamNoBrace",
-            expression="?EndDate",
-            return_type=DataType.DATE
-        )
+        formula = Formula(name="TestParamNoBrace", expression="?EndDate", return_type=DataType.DATE)
         result = self.translator.translate(formula)
         assert result.success
         assert ":P_ENDDATE" in result.plsql_code
@@ -358,7 +290,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestConcat",
             expression="{FirstName} & ' ' & {LastName}",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -368,9 +300,7 @@ class TestFormulaTranslator:
     def test_and_operator(self):
         """Test AND logical operator conversion."""
         formula = Formula(
-            name="TestAnd",
-            expression="{Active} And {Verified}",
-            return_type=DataType.BOOLEAN
+            name="TestAnd", expression="{Active} And {Verified}", return_type=DataType.BOOLEAN
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -381,7 +311,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestOr",
             expression="{Status} = 'A' Or {Status} = 'B'",
-            return_type=DataType.BOOLEAN
+            return_type=DataType.BOOLEAN,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -389,11 +319,7 @@ class TestFormulaTranslator:
 
     def test_not_operator(self):
         """Test NOT logical operator conversion."""
-        formula = Formula(
-            name="TestNot",
-            expression="Not {Active}",
-            return_type=DataType.BOOLEAN
-        )
+        formula = Formula(name="TestNot", expression="Not {Active}", return_type=DataType.BOOLEAN)
         result = self.translator.translate(formula)
         assert result.success
         assert "NOT" in result.plsql_code.upper()
@@ -402,9 +328,7 @@ class TestFormulaTranslator:
     def test_isnull_function(self):
         """Test IsNull function conversion."""
         formula = Formula(
-            name="TestIsNull",
-            expression="IsNull({Field})",
-            return_type=DataType.BOOLEAN
+            name="TestIsNull", expression="IsNull({Field})", return_type=DataType.BOOLEAN
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -416,7 +340,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestComplex",
             expression="IIF({Amount} > 1000, Round({Amount} * 0.9, 2), {Amount})",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -428,7 +352,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestNested",
             expression="Upper(Trim(Left({Name}, 10)))",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -439,11 +363,7 @@ class TestFormulaTranslator:
     # Return type tests
     def test_string_return_type(self):
         """Test formula with string return type."""
-        formula = Formula(
-            name="TestStringType",
-            expression="{Name}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestStringType", expression="{Name}", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert result.return_type == "VARCHAR2"
@@ -451,11 +371,7 @@ class TestFormulaTranslator:
 
     def test_number_return_type(self):
         """Test formula with number return type."""
-        formula = Formula(
-            name="TestNumberType",
-            expression="{Amount}",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestNumberType", expression="{Amount}", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert result.return_type == "NUMBER"
@@ -463,11 +379,7 @@ class TestFormulaTranslator:
 
     def test_date_return_type(self):
         """Test formula with date return type."""
-        formula = Formula(
-            name="TestDateType",
-            expression="{OrderDate}",
-            return_type=DataType.DATE
-        )
+        formula = Formula(name="TestDateType", expression="{OrderDate}", return_type=DataType.DATE)
         result = self.translator.translate(formula)
         assert result.success
         assert result.return_type == "DATE"
@@ -476,9 +388,7 @@ class TestFormulaTranslator:
     def test_datetime_return_type(self):
         """Test formula with datetime return type."""
         formula = Formula(
-            name="TestDateTimeType",
-            expression="{CreatedAt}",
-            return_type=DataType.DATETIME
+            name="TestDateTimeType", expression="{CreatedAt}", return_type=DataType.DATETIME
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -488,21 +398,13 @@ class TestFormulaTranslator:
     # Oracle name conversion tests
     def test_oracle_name_generation(self):
         """Test Oracle name generation from formula name."""
-        formula = Formula(
-            name="MyFormula",
-            expression="{Field}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="MyFormula", expression="{Field}", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.oracle_name == "CF_MYFORMULA"
 
     def test_oracle_name_with_special_chars(self):
         """Test Oracle name generation with special characters."""
-        formula = Formula(
-            name="My-Formula!",
-            expression="{Field}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="My-Formula!", expression="{Field}", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.oracle_name.startswith("CF_")
         assert "-" not in result.oracle_name
@@ -510,11 +412,7 @@ class TestFormulaTranslator:
 
     def test_oracle_name_starting_with_number(self):
         """Test Oracle name when formula starts with number."""
-        formula = Formula(
-            name="1stFormula",
-            expression="{Field}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="1stFormula", expression="{Field}", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         # Should add F_ prefix for names starting with digit
         assert result.oracle_name.startswith("CF_F_") or result.oracle_name.startswith("CF_1")
@@ -522,11 +420,7 @@ class TestFormulaTranslator:
     # Empty and edge cases
     def test_empty_formula(self):
         """Test empty formula conversion."""
-        formula = Formula(
-            name="TestEmpty",
-            expression="",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestEmpty", expression="", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert "NULL" in result.plsql_code.upper()
@@ -535,9 +429,7 @@ class TestFormulaTranslator:
     def test_whitespace_only_formula(self):
         """Test formula with only whitespace."""
         formula = Formula(
-            name="TestWhitespace",
-            expression="   \n\t   ",
-            return_type=DataType.STRING
+            name="TestWhitespace", expression="   \n\t   ", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -564,9 +456,7 @@ class TestFormulaTranslator:
     def test_extract_column_references_single(self):
         """Test extraction of single column reference."""
         formula = Formula(
-            name="TestExtract",
-            expression="{CustomerName}",
-            return_type=DataType.STRING
+            name="TestExtract", expression="{CustomerName}", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert "CUSTOMERNAME" in result.referenced_columns
@@ -576,7 +466,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestMultiRef",
             expression="{FirstName} & ' ' & {LastName}",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert "FIRSTNAME" in result.referenced_columns
@@ -585,9 +475,7 @@ class TestFormulaTranslator:
     def test_extract_column_references_none(self):
         """Test extraction when no column references exist."""
         formula = Formula(
-            name="TestNoRef",
-            expression="'Constant Value'",
-            return_type=DataType.STRING
+            name="TestNoRef", expression="'Constant Value'", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert len(result.referenced_columns) == 0
@@ -595,22 +483,14 @@ class TestFormulaTranslator:
     # Aggregate function tests
     def test_sum_aggregate(self):
         """Test SUM aggregate function."""
-        formula = Formula(
-            name="TestSum",
-            expression="Sum({Amount})",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestSum", expression="Sum({Amount})", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "SUM(:AMOUNT)" in result.plsql_code
 
     def test_avg_aggregate(self):
         """Test AVG aggregate function."""
-        formula = Formula(
-            name="TestAvg",
-            expression="Avg({Quantity})",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestAvg", expression="Avg({Quantity})", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "AVG(:QUANTITY)" in result.plsql_code
@@ -618,9 +498,7 @@ class TestFormulaTranslator:
     def test_count_aggregate(self):
         """Test COUNT aggregate function."""
         formula = Formula(
-            name="TestCount",
-            expression="Count({OrderID})",
-            return_type=DataType.NUMBER
+            name="TestCount", expression="Count({OrderID})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -630,9 +508,7 @@ class TestFormulaTranslator:
     def test_totext_function(self):
         """Test ToText conversion function."""
         formula = Formula(
-            name="TestToText",
-            expression="ToText({Amount})",
-            return_type=DataType.STRING
+            name="TestToText", expression="ToText({Amount})", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -641,9 +517,7 @@ class TestFormulaTranslator:
     def test_tonumber_function(self):
         """Test ToNumber conversion function."""
         formula = Formula(
-            name="TestToNumber",
-            expression="ToNumber({StringField})",
-            return_type=DataType.NUMBER
+            name="TestToNumber", expression="ToNumber({StringField})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -657,7 +531,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestUnsupported",
             expression="SomeComplexUnsupportedFunction({Field})",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = translator.translate(formula)
         # Should create placeholder and succeed
@@ -669,7 +543,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestSkip",
             expression="",  # Empty will trigger special handling
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = translator.translate(formula)
         assert result.success  # Empty formulas are handled
@@ -677,11 +551,7 @@ class TestFormulaTranslator:
     # Case sensitivity tests
     def test_function_case_insensitive(self):
         """Test that function names are case-insensitive."""
-        formula = Formula(
-            name="TestCase",
-            expression="UPPER({field})",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestCase", expression="UPPER({field})", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert "UPPER(:FIELD)" in result.plsql_code
@@ -692,32 +562,23 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestComments",
             expression="{Field} // This is a comment",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
         assert "//" not in result.plsql_code or "RETURN" in result.plsql_code
 
-
     # NEW STRING FUNCTION TESTS
     def test_chr_function(self):
         """Test Chr(n) -> CHR(n)."""
-        formula = Formula(
-            name="TestChr",
-            expression="Chr(65)",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestChr", expression="Chr(65)", return_type=DataType.STRING)
         result = self.translator.translate(formula)
         assert result.success
         assert "CHR(65)" in result.plsql_code
 
     def test_asc_function(self):
         """Test Asc(str) -> ASCII(str)."""
-        formula = Formula(
-            name="TestAsc",
-            expression="Asc('A')",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestAsc", expression="Asc('A')", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "ASCII('A')" in result.plsql_code
@@ -725,21 +586,19 @@ class TestFormulaTranslator:
     def test_strcmp_function(self):
         """Test StrCmp(s1, s2) -> CASE WHEN."""
         formula = Formula(
-            name="TestStrCmp",
-            expression="StrCmp('abc', 'def')",
-            return_type=DataType.NUMBER
+            name="TestStrCmp", expression="StrCmp('abc', 'def')", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
         assert "CASE WHEN" in result.plsql_code
-        assert "'abc' < 'def'" in result.plsql_code or "'abc'<'def'" in result.plsql_code.replace(" ", "")
+        assert "'abc' < 'def'" in result.plsql_code or "'abc'<'def'" in result.plsql_code.replace(
+            " ", ""
+        )
 
     def test_replicatestring_function(self):
         """Test ReplicateString(str, n) -> RPAD."""
         formula = Formula(
-            name="TestReplicate",
-            expression="ReplicateString('AB', 5)",
-            return_type=DataType.STRING
+            name="TestReplicate", expression="ReplicateString('AB', 5)", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -748,9 +607,7 @@ class TestFormulaTranslator:
     def test_strreverse_function(self):
         """Test StrReverse(str) -> REVERSE(str)."""
         formula = Formula(
-            name="TestReverse",
-            expression="StrReverse('hello')",
-            return_type=DataType.STRING
+            name="TestReverse", expression="StrReverse('hello')", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -761,7 +618,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestProperCase",
             expression="ProperCase('hello world')",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -771,9 +628,7 @@ class TestFormulaTranslator:
     def test_weekday_function(self):
         """Test WeekDay(date) -> TO_CHAR(date, 'D')."""
         formula = Formula(
-            name="TestWeekDay",
-            expression="WeekDay({DateField})",
-            return_type=DataType.STRING
+            name="TestWeekDay", expression="WeekDay({DateField})", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -782,9 +637,7 @@ class TestFormulaTranslator:
     def test_monthname_function(self):
         """Test MonthName(date) -> TO_CHAR(date, 'Month')."""
         formula = Formula(
-            name="TestMonthName",
-            expression="MonthName({DateField})",
-            return_type=DataType.STRING
+            name="TestMonthName", expression="MonthName({DateField})", return_type=DataType.STRING
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -792,11 +645,7 @@ class TestFormulaTranslator:
 
     def test_timer_function(self):
         """Test Timer -> (SYSDATE - TRUNC(SYSDATE)) * 86400."""
-        formula = Formula(
-            name="TestTimer",
-            expression="Timer",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestTimer", expression="Timer", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "(SYSDATE - TRUNC(SYSDATE)) * 86400" in result.plsql_code
@@ -806,7 +655,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestDatePartYear",
             expression="DatePart('yyyy', {DateField})",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -817,7 +666,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestDatePartQuarter",
             expression="DatePart('q', {DateField})",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -828,7 +677,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestDatePartMonth",
             expression="DatePart('m', {DateField})",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -837,66 +686,42 @@ class TestFormulaTranslator:
     # NEW MATH FUNCTION TESTS
     def test_sqr_function(self):
         """Test Sqr(n) -> SQRT(n)."""
-        formula = Formula(
-            name="TestSqr",
-            expression="Sqr(16)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestSqr", expression="Sqr(16)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "SQRT(16)" in result.plsql_code
 
     def test_exp_function(self):
         """Test Exp(n) -> EXP(n)."""
-        formula = Formula(
-            name="TestExp",
-            expression="Exp(2)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestExp", expression="Exp(2)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "EXP(2)" in result.plsql_code
 
     def test_log_function(self):
         """Test Log(n) -> LN(n)."""
-        formula = Formula(
-            name="TestLog",
-            expression="Log(10)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestLog", expression="Log(10)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "LN(10)" in result.plsql_code
 
     def test_sgn_function(self):
         """Test Sgn(n) -> SIGN(n)."""
-        formula = Formula(
-            name="TestSgn",
-            expression="Sgn(-5)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestSgn", expression="Sgn(-5)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "SIGN(-5)" in result.plsql_code
 
     def test_fix_function(self):
         """Test Fix(n) -> TRUNC(n)."""
-        formula = Formula(
-            name="TestFix",
-            expression="Fix(3.7)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestFix", expression="Fix(3.7)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "TRUNC(3.7)" in result.plsql_code
 
     def test_int_function(self):
         """Test Int(n) -> FLOOR(n)."""
-        formula = Formula(
-            name="TestInt",
-            expression="Int(3.7)",
-            return_type=DataType.NUMBER
-        )
+        formula = Formula(name="TestInt", expression="Int(3.7)", return_type=DataType.NUMBER)
         result = self.translator.translate(formula)
         assert result.success
         assert "FLOOR(3.7)" in result.plsql_code
@@ -904,9 +729,7 @@ class TestFormulaTranslator:
     def test_ceiling_function(self):
         """Test Ceiling(n) -> CEIL(n)."""
         formula = Formula(
-            name="TestCeiling",
-            expression="Ceiling(3.2)",
-            return_type=DataType.NUMBER
+            name="TestCeiling", expression="Ceiling(3.2)", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -916,9 +739,7 @@ class TestFormulaTranslator:
     def test_average_function(self):
         """Test Average(field) -> AVG(field)."""
         formula = Formula(
-            name="TestAverage",
-            expression="Average({Amount})",
-            return_type=DataType.NUMBER
+            name="TestAverage", expression="Average({Amount})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -927,9 +748,7 @@ class TestFormulaTranslator:
     def test_maximum_function(self):
         """Test Maximum(field) -> MAX(field)."""
         formula = Formula(
-            name="TestMaximum",
-            expression="Maximum({Amount})",
-            return_type=DataType.NUMBER
+            name="TestMaximum", expression="Maximum({Amount})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -938,9 +757,7 @@ class TestFormulaTranslator:
     def test_minimum_function(self):
         """Test Minimum(field) -> MIN(field)."""
         formula = Formula(
-            name="TestMinimum",
-            expression="Minimum({Amount})",
-            return_type=DataType.NUMBER
+            name="TestMinimum", expression="Minimum({Amount})", return_type=DataType.NUMBER
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -952,7 +769,7 @@ class TestFormulaTranslator:
         formula = Formula(
             name="TestRunningTotal",
             expression="RunningTotal({Amount})",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
         result = self.translator.translate(formula)
         assert result.success
@@ -970,11 +787,7 @@ class TestFormulaTranslatorConfiguration:
     def test_custom_formula_prefix(self):
         """Test custom formula prefix."""
         translator = FormulaTranslator(formula_prefix="FRM_")
-        formula = Formula(
-            name="TestPrefix",
-            expression="{Field}",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="TestPrefix", expression="{Field}", return_type=DataType.STRING)
         result = translator.translate(formula)
         assert result.oracle_name.startswith("FRM_")
 
@@ -998,7 +811,7 @@ class TestTranslatedFormula:
             return_type="VARCHAR2",
             success=True,
             warnings=["Test warning"],
-            referenced_columns=["FIELD1", "FIELD2"]
+            referenced_columns=["FIELD1", "FIELD2"],
         )
         result = tf.to_dict()
         assert result["original_name"] == "TestFormula"
@@ -1014,7 +827,7 @@ class TestTranslatedFormula:
             oracle_name="CF_TEST",
             plsql_code="-- placeholder",
             return_type="VARCHAR2",
-            is_placeholder=True
+            is_placeholder=True,
         )
         assert tf.is_placeholder is True
         assert tf.to_dict()["is_placeholder"] is True

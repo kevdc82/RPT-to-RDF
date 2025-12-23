@@ -7,7 +7,7 @@ Maps Crystal Reports parameters to Oracle Reports parameters.
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ..parsing.report_model import Parameter, DataType
+from ..parsing.report_model import DataType, Parameter
 from .type_mapper import TypeMapper
 
 
@@ -100,6 +100,7 @@ class ParameterMapper:
 
         # Replace invalid characters
         import re
+
         oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
 
         # Ensure starts with letter

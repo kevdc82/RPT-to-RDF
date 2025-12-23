@@ -8,12 +8,12 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..parsing.report_model import (
-    Section,
     Field,
-    Group,
-    SectionType,
     FontSpec,
     FormatSpec,
+    Group,
+    Section,
+    SectionType,
 )
 from ..utils.logger import get_logger
 from .font_mapper import FontMapper
@@ -310,8 +310,8 @@ class LayoutMapper:
         self,
         field_prefix: str = "F_",
         coordinate_unit: str = "points",
-        default_font: str = "Arial",
-        default_font_size: int = 10,
+        default_font: Optional[str] = None,
+        default_font_size: Optional[int] = None,
         font_config_path: Optional[str] = None,
     ):
         """Initialize the layout mapper.
@@ -319,14 +319,12 @@ class LayoutMapper:
         Args:
             field_prefix: Prefix for Oracle field names.
             coordinate_unit: Unit for coordinates ('points', 'inches', 'cm').
-            default_font: Default font name.
-            default_font_size: Default font size.
+            default_font: Default font name (if None, uses config or 'Arial').
+            default_font_size: Default font size (if None, uses config or 10).
             font_config_path: Optional path to font_mappings.yaml configuration.
         """
         self.field_prefix = field_prefix
         self.coordinate_unit = coordinate_unit
-        self.default_font = default_font
-        self.default_font_size = default_font_size
         self.logger = get_logger("layout_mapper")
         self.converter = CoordinateConverter()
 
@@ -336,6 +334,10 @@ class LayoutMapper:
             default_font=default_font,
             default_size=default_font_size,
         )
+
+        # Store effective defaults for reference
+        self.default_font = self.font_mapper.default_font
+        self.default_font_size = self.font_mapper.default_size
 
         # Frame counter for unique names
         self._frame_counter = 0
@@ -601,9 +603,7 @@ class LayoutMapper:
             frame_name = frame_name.replace("{group}", group_name)
 
         # Convert section height from twips to target unit
-        converted_height = self.converter.convert(
-            section.height, "twips", self.coordinate_unit
-        )
+        converted_height = self.converter.convert(section.height, "twips", self.coordinate_unit)
 
         frame = OracleFrame(
             name=frame_name,
@@ -673,12 +673,14 @@ class LayoutMapper:
         converted_x = self.converter.convert(crystal_field.x, "twips", self.coordinate_unit)
         converted_y = self.converter.convert(crystal_field.y, "twips", self.coordinate_unit)
         converted_width = self.converter.convert(crystal_field.width, "twips", self.coordinate_unit)
-        converted_height = self.converter.convert(crystal_field.height, "twips", self.coordinate_unit)
+        converted_height = self.converter.convert(
+            crystal_field.height, "twips", self.coordinate_unit
+        )
 
         # Handle suppress conditions and generate format triggers
         format_trigger_name = None
 
-        if hasattr(self, '_condition_mapper') and self._condition_mapper:
+        if hasattr(self, "_condition_mapper") and self._condition_mapper:
             # Check for explicit suppress condition
             if crystal_field.suppress_condition:
                 trigger = self._condition_mapper.convert_suppress_condition(
@@ -723,5 +725,4 @@ class LayoutMapper:
         Returns:
             List of FormatTrigger objects.
         """
-        return self._format_triggers if hasattr(self, '_format_triggers') else []
-
+        return self._format_triggers if hasattr(self, "_format_triggers") else []

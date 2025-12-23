@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 class SectionType(Enum):
     """Types of report sections."""
+
     REPORT_HEADER = "ReportHeader"
     PAGE_HEADER = "PageHeader"
     GROUP_HEADER = "GroupHeader"
@@ -24,12 +25,14 @@ class SectionType(Enum):
 
 class FormulaSyntax(Enum):
     """Crystal Reports formula syntax types."""
+
     CRYSTAL = "Crystal"
     BASIC = "Basic"
 
 
 class DataType(Enum):
     """Data types for report elements."""
+
     STRING = "String"
     NUMBER = "Number"
     CURRENCY = "Currency"
@@ -44,6 +47,7 @@ class DataType(Enum):
 
 class ConnectionType(Enum):
     """Database connection types."""
+
     ODBC = "ODBC"
     OLE_DB = "OLE DB"
     JDBC = "JDBC"
@@ -56,6 +60,7 @@ class ConnectionType(Enum):
 @dataclass
 class FontSpec:
     """Font specification for text elements."""
+
     name: str = "Arial"
     size: int = 10
     bold: bool = False
@@ -80,6 +85,7 @@ class FontSpec:
 @dataclass
 class FormatSpec:
     """Format specification for fields."""
+
     format_string: Optional[str] = None
     horizontal_alignment: str = "left"  # left, center, right
     vertical_alignment: str = "top"  # top, middle, bottom
@@ -102,6 +108,7 @@ class FormatSpec:
 @dataclass
 class QueryColumn:
     """Column definition in a query."""
+
     name: str
     data_type: DataType = DataType.STRING
     table_name: Optional[str] = None
@@ -126,6 +133,7 @@ class QueryColumn:
 @dataclass
 class DataSource:
     """Database connection and source information."""
+
     name: str
     connection_type: ConnectionType = ConnectionType.UNKNOWN
     connection_string: str = ""
@@ -150,6 +158,7 @@ class DataSource:
 @dataclass
 class Query:
     """SQL query definition."""
+
     name: str
     sql: str = ""
     tables: list[str] = field(default_factory=list)
@@ -170,6 +179,7 @@ class Query:
 @dataclass
 class Formula:
     """Crystal Reports formula definition."""
+
     name: str
     syntax: FormulaSyntax = FormulaSyntax.CRYSTAL
     expression: str = ""
@@ -194,6 +204,7 @@ class Formula:
 @dataclass
 class Parameter:
     """Report parameter definition."""
+
     name: str
     data_type: DataType = DataType.STRING
     default_value: Optional[Any] = None
@@ -228,6 +239,7 @@ class Parameter:
 @dataclass
 class Field:
     """Report field definition."""
+
     name: str
     source: str = ""  # Database field, formula, or parameter name
     source_type: str = "database"  # database, formula, parameter, special
@@ -264,6 +276,7 @@ class Field:
 @dataclass
 class Group:
     """Report group definition (for grouping and sorting)."""
+
     name: str
     field_name: str = ""
     sort_direction: str = "ascending"  # ascending, descending
@@ -288,6 +301,7 @@ class Group:
 @dataclass
 class Section:
     """Report section definition."""
+
     name: str
     section_type: SectionType
     height: float = 0.0
@@ -320,6 +334,7 @@ class Section:
 @dataclass
 class SubreportReference:
     """Reference to a subreport."""
+
     name: str
     file_path: Optional[str] = None
     x: float = 0.0
@@ -348,6 +363,7 @@ class SubreportReference:
 @dataclass
 class CrossTabCell:
     """A cell definition in a cross-tab report."""
+
     name: str
     field_name: str  # The field being summarized
     summary_type: str = "sum"  # sum, count, avg, min, max, etc.
@@ -366,6 +382,7 @@ class CrossTabCell:
 @dataclass
 class CrossTab:
     """Cross-tab (pivot table) object in a report."""
+
     name: str
 
     # Position and size
@@ -411,6 +428,7 @@ class CrossTab:
 
 class ChartType(Enum):
     """Types of charts supported."""
+
     BAR = "bar"
     LINE = "line"
     PIE = "pie"
@@ -428,6 +446,7 @@ class ChartType(Enum):
 @dataclass
 class ChartDataSeries:
     """Data series for a chart."""
+
     name: str
     field_name: str  # Source field for values
     color: Optional[str] = None
@@ -450,6 +469,7 @@ class ChartDataSeries:
 @dataclass
 class Chart:
     """Chart or graph object in a report."""
+
     name: str
     chart_type: ChartType = ChartType.BAR
 
@@ -510,6 +530,7 @@ class Chart:
 @dataclass
 class ReportMetadata:
     """Report metadata and properties."""
+
     title: Optional[str] = None
     author: Optional[str] = None
     subject: Optional[str] = None

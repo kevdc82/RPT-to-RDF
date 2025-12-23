@@ -14,16 +14,15 @@ from typing import Optional
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    MofNCompleteColumn,
 )
-
 
 # Module-level logger cache
 _loggers: dict[str, logging.Logger] = {}
@@ -162,12 +161,14 @@ class ConversionProgressTracker:
         if self.show_eta:
             columns.append(TimeRemainingColumn())
 
-        columns.extend([
-            TextColumn("•"),
-            TextColumn("[green]{task.fields[successful]} OK[/]"),
-            TextColumn("[yellow]{task.fields[partial]} partial[/]"),
-            TextColumn("[red]{task.fields[failed]} failed[/]"),
-        ])
+        columns.extend(
+            [
+                TextColumn("•"),
+                TextColumn("[green]{task.fields[successful]} OK[/]"),
+                TextColumn("[yellow]{task.fields[partial]} partial[/]"),
+                TextColumn("[red]{task.fields[failed]} failed[/]"),
+            ]
+        )
 
         if self.show_rate:
             columns.append(TextColumn("({task.fields[rate]})"))

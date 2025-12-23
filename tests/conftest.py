@@ -4,24 +4,26 @@ Pytest configuration and shared fixtures.
 This file contains common fixtures used across multiple test files.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from src.parsing.report_model import (
-    Formula,
-    Section,
+    DataType,
     Field,
+    FontSpec,
+    FormatSpec,
+    Formula,
+    FormulaSyntax,
     Group,
     Query,
     QueryColumn,
-    DataType,
+    Section,
     SectionType,
-    FormulaSyntax,
-    FontSpec,
-    FormatSpec,
 )
 from src.transformation.formula_translator import FormulaTranslator
-from src.transformation.type_mapper import TypeMapper
 from src.transformation.layout_mapper import LayoutMapper
+from src.transformation.type_mapper import TypeMapper
 
 
 # Directory fixtures
@@ -76,7 +78,7 @@ def sample_string_formula():
         name="TestFormula",
         expression="{FirstName} & ' ' & {LastName}",
         return_type=DataType.STRING,
-        syntax=FormulaSyntax.CRYSTAL
+        syntax=FormulaSyntax.CRYSTAL,
     )
 
 
@@ -87,7 +89,7 @@ def sample_number_formula():
         name="TotalAmount",
         expression="{Quantity} * {Price}",
         return_type=DataType.NUMBER,
-        syntax=FormulaSyntax.CRYSTAL
+        syntax=FormulaSyntax.CRYSTAL,
     )
 
 
@@ -98,7 +100,7 @@ def sample_date_formula():
         name="CurrentDate",
         expression="CurrentDate",
         return_type=DataType.DATE,
-        syntax=FormulaSyntax.CRYSTAL
+        syntax=FormulaSyntax.CRYSTAL,
     )
 
 
@@ -109,7 +111,7 @@ def sample_iif_formula():
         name="StatusCheck",
         expression="IIF({Amount} > 100, 'High', 'Low')",
         return_type=DataType.STRING,
-        syntax=FormulaSyntax.CRYSTAL
+        syntax=FormulaSyntax.CRYSTAL,
     )
 
 
@@ -125,7 +127,7 @@ def sample_field():
         width=150.0,
         height=14.0,
         font=FontSpec(name="Arial", size=10, bold=False, italic=False),
-        format=FormatSpec(horizontal_alignment="left", vertical_alignment="top")
+        format=FormatSpec(horizontal_alignment="left", vertical_alignment="top"),
     )
 
 
@@ -141,7 +143,7 @@ def sample_formula_field():
         width=100.0,
         height=14.0,
         font=FontSpec(name="Arial", size=10),
-        format=FormatSpec(horizontal_alignment="right")
+        format=FormatSpec(horizontal_alignment="right"),
     )
 
 
@@ -160,7 +162,7 @@ def sample_section():
                 x=10.0,
                 y=5.0,
                 width=100.0,
-                height=14.0
+                height=14.0,
             ),
             Field(
                 name="Field2",
@@ -169,20 +171,16 @@ def sample_section():
                 x=120.0,
                 y=5.0,
                 width=100.0,
-                height=14.0
+                height=14.0,
             ),
-        ]
+        ],
     )
 
 
 @pytest.fixture
 def sample_group():
     """Create a sample group."""
-    return Group(
-        name="CustomerGroup",
-        field_name="Customer",
-        sort_direction="ascending"
-    )
+    return Group(name="CustomerGroup", field_name="Customer", sort_direction="ascending")
 
 
 @pytest.fixture
@@ -193,30 +191,19 @@ def sample_query():
         sql="SELECT * FROM CUSTOMERS",
         tables=["CUSTOMERS"],
         columns=[
+            QueryColumn(name="CUSTOMER_ID", data_type=DataType.NUMBER, table_name="CUSTOMERS"),
             QueryColumn(
-                name="CUSTOMER_ID",
-                data_type=DataType.NUMBER,
-                table_name="CUSTOMERS"
+                name="CUSTOMER_NAME", data_type=DataType.STRING, table_name="CUSTOMERS", length=100
             ),
-            QueryColumn(
-                name="CUSTOMER_NAME",
-                data_type=DataType.STRING,
-                table_name="CUSTOMERS",
-                length=100
-            ),
-            QueryColumn(
-                name="ORDER_DATE",
-                data_type=DataType.DATE,
-                table_name="CUSTOMERS"
-            ),
+            QueryColumn(name="ORDER_DATE", data_type=DataType.DATE, table_name="CUSTOMERS"),
             QueryColumn(
                 name="AMOUNT",
                 data_type=DataType.CURRENCY,
                 table_name="CUSTOMERS",
                 precision=15,
-                scale=2
+                scale=2,
             ),
-        ]
+        ],
     )
 
 
@@ -236,9 +223,9 @@ def sample_page_header_section():
                 y=10.0,
                 width=200.0,
                 height=16.0,
-                font=FontSpec(name="Arial", size=14, bold=True)
+                font=FontSpec(name="Arial", size=14, bold=True),
             )
-        ]
+        ],
     )
 
 
@@ -257,9 +244,9 @@ def sample_page_footer_section():
                 x=280.0,
                 y=5.0,
                 width=50.0,
-                height=14.0
+                height=14.0,
             )
-        ]
+        ],
     )
 
 
@@ -280,9 +267,9 @@ def sample_group_header_section():
                 y=5.0,
                 width=150.0,
                 height=14.0,
-                font=FontSpec(bold=True)
+                font=FontSpec(bold=True),
             )
-        ]
+        ],
     )
 
 
@@ -302,9 +289,9 @@ def sample_group_footer_section():
                 x=200.0,
                 y=5.0,
                 width=100.0,
-                height=14.0
+                height=14.0,
             )
-        ]
+        ],
     )
 
 
@@ -350,19 +337,14 @@ def right_aligned_format():
 def currency_format():
     """Create a currency format specification."""
     return FormatSpec(
-        format_string="$#,##0.00",
-        horizontal_alignment="right",
-        suppress_if_zero=False
+        format_string="$#,##0.00", horizontal_alignment="right", suppress_if_zero=False
     )
 
 
 @pytest.fixture
 def date_format():
     """Create a date format specification."""
-    return FormatSpec(
-        format_string="MM/dd/yyyy",
-        horizontal_alignment="left"
-    )
+    return FormatSpec(format_string="MM/dd/yyyy", horizontal_alignment="left")
 
 
 # Collection fixtures
@@ -370,30 +352,18 @@ def date_format():
 def sample_formula_list():
     """Create a list of sample formulas."""
     return [
-        Formula(
-            name="Formula1",
-            expression="{Field1} & {Field2}",
-            return_type=DataType.STRING
-        ),
-        Formula(
-            name="Formula2",
-            expression="{Amount} * 1.1",
-            return_type=DataType.NUMBER
-        ),
+        Formula(name="Formula1", expression="{Field1} & {Field2}", return_type=DataType.STRING),
+        Formula(name="Formula2", expression="{Amount} * 1.1", return_type=DataType.NUMBER),
         Formula(
             name="Formula3",
             expression="IIF({Status} = 'A', 'Active', 'Inactive')",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         ),
     ]
 
 
 @pytest.fixture
-def sample_section_list(
-    sample_page_header_section,
-    sample_section,
-    sample_page_footer_section
-):
+def sample_section_list(sample_page_header_section, sample_section, sample_page_footer_section):
     """Create a list of sample sections."""
     return [
         sample_page_header_section,

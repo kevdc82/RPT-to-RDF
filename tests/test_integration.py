@@ -5,22 +5,23 @@ Tests the complete transformation pipeline from Crystal Reports to Oracle Report
 """
 
 import pytest
-from src.transformation.formula_translator import FormulaTranslator
-from src.transformation.type_mapper import TypeMapper
-from src.transformation.layout_mapper import LayoutMapper
+
 from src.parsing.report_model import (
-    ReportModel,
-    Formula,
-    Section,
+    DataType,
     Field,
+    FontSpec,
+    FormatSpec,
+    Formula,
     Group,
     Query,
     QueryColumn,
+    ReportModel,
+    Section,
     SectionType,
-    DataType,
-    FontSpec,
-    FormatSpec,
 )
+from src.transformation.formula_translator import FormulaTranslator
+from src.transformation.layout_mapper import LayoutMapper
+from src.transformation.type_mapper import TypeMapper
 
 
 class TestEndToEndTransformation:
@@ -42,7 +43,7 @@ class TestEndToEndTransformation:
                 QueryColumn(name="CUSTOMER_ID", data_type=DataType.NUMBER),
                 QueryColumn(name="CUSTOMER_NAME", data_type=DataType.STRING),
                 QueryColumn(name="AMOUNT", data_type=DataType.CURRENCY),
-            ]
+            ],
         )
 
         detail_section = Section(
@@ -57,7 +58,7 @@ class TestEndToEndTransformation:
                     x=10.0,
                     y=5.0,
                     width=150.0,
-                    height=14.0
+                    height=14.0,
                 ),
                 Field(
                     name="Amount",
@@ -67,9 +68,9 @@ class TestEndToEndTransformation:
                     y=5.0,
                     width=100.0,
                     height=14.0,
-                    format=FormatSpec(format_string="$#,##0.00")
+                    format=FormatSpec(format_string="$#,##0.00"),
                 ),
-            ]
+            ],
         )
 
         # Map types
@@ -90,17 +91,17 @@ class TestEndToEndTransformation:
             Formula(
                 name="FullName",
                 expression="{FirstName} & ' ' & {LastName}",
-                return_type=DataType.STRING
+                return_type=DataType.STRING,
             ),
             Formula(
                 name="DiscountedAmount",
                 expression="IIF({Amount} > 1000, {Amount} * 0.9, {Amount})",
-                return_type=DataType.NUMBER
+                return_type=DataType.NUMBER,
             ),
             Formula(
                 name="Status",
                 expression="IIF({Active}, 'Active', 'Inactive')",
-                return_type=DataType.STRING
+                return_type=DataType.STRING,
             ),
         ]
 
@@ -134,40 +135,34 @@ class TestEndToEndTransformation:
                 section_type=SectionType.GROUP_HEADER,
                 group_number=1,
                 height=25.0,
-                fields=[
-                    Field(name="RegionLabel", source="Region", x=10.0, y=5.0)
-                ]
+                fields=[Field(name="RegionLabel", source="Region", x=10.0, y=5.0)],
             ),
             Section(
                 name="GroupHeader2",
                 section_type=SectionType.GROUP_HEADER,
                 group_number=2,
                 height=20.0,
-                fields=[
-                    Field(name="CustomerLabel", source="Customer", x=20.0, y=5.0)
-                ]
+                fields=[Field(name="CustomerLabel", source="Customer", x=20.0, y=5.0)],
             ),
             Section(
                 name="Detail",
                 section_type=SectionType.DETAIL,
                 height=15.0,
-                fields=[
-                    Field(name="OrderID", source="OrderID", x=30.0, y=5.0)
-                ]
+                fields=[Field(name="OrderID", source="OrderID", x=30.0, y=5.0)],
             ),
             Section(
                 name="GroupFooter2",
                 section_type=SectionType.GROUP_FOOTER,
                 group_number=2,
                 height=20.0,
-                fields=[]
+                fields=[],
             ),
             Section(
                 name="GroupFooter1",
                 section_type=SectionType.GROUP_FOOTER,
                 group_number=1,
                 height=25.0,
-                fields=[]
+                fields=[],
             ),
         ]
 
@@ -185,41 +180,31 @@ class TestEndToEndTransformation:
                 name="ReportHeader",
                 section_type=SectionType.REPORT_HEADER,
                 height=50.0,
-                fields=[
-                    Field(name="Title", source="'Sales Report'", x=200.0, y=10.0)
-                ]
+                fields=[Field(name="Title", source="'Sales Report'", x=200.0, y=10.0)],
             ),
             Section(
                 name="PageHeader",
                 section_type=SectionType.PAGE_HEADER,
                 height=30.0,
-                fields=[
-                    Field(name="ColumnHeader", source="'Customer'", x=10.0, y=5.0)
-                ]
+                fields=[Field(name="ColumnHeader", source="'Customer'", x=10.0, y=5.0)],
             ),
             Section(
                 name="Detail",
                 section_type=SectionType.DETAIL,
                 height=20.0,
-                fields=[
-                    Field(name="CustomerName", source="CUSTOMER_NAME", x=10.0, y=5.0)
-                ]
+                fields=[Field(name="CustomerName", source="CUSTOMER_NAME", x=10.0, y=5.0)],
             ),
             Section(
                 name="PageFooter",
                 section_type=SectionType.PAGE_FOOTER,
                 height=25.0,
-                fields=[
-                    Field(name="PageNumber", source="PageNumber", x=280.0, y=5.0)
-                ]
+                fields=[Field(name="PageNumber", source="PageNumber", x=280.0, y=5.0)],
             ),
             Section(
                 name="ReportFooter",
                 section_type=SectionType.REPORT_FOOTER,
                 height=40.0,
-                fields=[
-                    Field(name="Summary", source="'End of Report'", x=200.0, y=10.0)
-                ]
+                fields=[Field(name="Summary", source="'End of Report'", x=200.0, y=10.0)],
             ),
         ]
 
@@ -241,7 +226,7 @@ class TestEndToEndTransformation:
                     {Amount}
                 )
             """,
-            return_type=DataType.CURRENCY
+            return_type=DataType.CURRENCY,
         )
 
         # Translate formula
@@ -263,7 +248,7 @@ class TestEndToEndTransformation:
             name="OrderDate",
             source="ORDER_DATE",
             source_type="database",
-            format=FormatSpec(format_string="MM/dd/yyyy")
+            format=FormatSpec(format_string="MM/dd/yyyy"),
         )
 
         # Map field to Oracle
@@ -278,20 +263,14 @@ class TestEndToEndTransformation:
     def test_multiple_data_types_in_detail_section(self):
         """Test detail section with multiple data types."""
         fields = [
-            Field(
-                name="OrderID",
-                source="ORDER_ID",
-                source_type="database",
-                x=10.0,
-                y=5.0
-            ),
+            Field(name="OrderID", source="ORDER_ID", source_type="database", x=10.0, y=5.0),
             Field(
                 name="OrderDate",
                 source="ORDER_DATE",
                 source_type="database",
                 x=80.0,
                 y=5.0,
-                format=FormatSpec(format_string="MM/dd/yyyy")
+                format=FormatSpec(format_string="MM/dd/yyyy"),
             ),
             Field(
                 name="Amount",
@@ -299,22 +278,13 @@ class TestEndToEndTransformation:
                 source_type="database",
                 x=160.0,
                 y=5.0,
-                format=FormatSpec(format_string="$#,##0.00")
+                format=FormatSpec(format_string="$#,##0.00"),
             ),
-            Field(
-                name="Active",
-                source="ACTIVE",
-                source_type="database",
-                x=260.0,
-                y=5.0
-            ),
+            Field(name="Active", source="ACTIVE", source_type="database", x=260.0, y=5.0),
         ]
 
         section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=fields
+            name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=fields
         )
 
         frame = self.layout_mapper._map_section(section, 600.0, [])
@@ -336,7 +306,7 @@ class TestFormulaAndTypeIntegration:
         formula = Formula(
             name="CombinedName",
             expression="Upper({FirstName}) & ' ' & Upper({LastName})",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
 
         translated = self.formula_translator.translate(formula)
@@ -350,7 +320,7 @@ class TestFormulaAndTypeIntegration:
         formula = Formula(
             name="Calculation",
             expression="Round({Price} * {Quantity}, 2)",
-            return_type=DataType.NUMBER
+            return_type=DataType.NUMBER,
         )
 
         translated = self.formula_translator.translate(formula)
@@ -359,11 +329,7 @@ class TestFormulaAndTypeIntegration:
         assert "ROUND" in translated.plsql_code.upper()
 
         # Map with custom precision
-        oracle_type = self.type_mapper.map_type(
-            formula.return_type,
-            precision=10,
-            scale=2
-        )
+        oracle_type = self.type_mapper.map_type(formula.return_type, precision=10, scale=2)
 
         assert str(oracle_type) == "NUMBER(10,2)"
 
@@ -372,7 +338,7 @@ class TestFormulaAndTypeIntegration:
         formula = Formula(
             name="FormattedDate",
             expression="Year({OrderDate}) & '-' & Month({OrderDate})",
-            return_type=DataType.STRING
+            return_type=DataType.STRING,
         )
 
         translated = self.formula_translator.translate(formula)
@@ -393,9 +359,7 @@ class TestLayoutAndFormulaIntegration:
         """Test section containing formula field."""
         # Create formula
         formula = Formula(
-            name="CalculatedField",
-            expression="{Amount} * 1.1",
-            return_type=DataType.NUMBER
+            name="CalculatedField", expression="{Amount} * 1.1", return_type=DataType.NUMBER
         )
 
         # Translate formula
@@ -403,11 +367,7 @@ class TestLayoutAndFormulaIntegration:
 
         # Create field referencing formula
         field = Field(
-            name="CalcField",
-            source="@CalculatedField",
-            source_type="formula",
-            x=10.0,
-            y=5.0
+            name="CalcField", source="@CalculatedField", source_type="formula", x=10.0, y=5.0
         )
 
         # Map field
@@ -431,14 +391,13 @@ class TestLayoutAndFormulaIntegration:
         fields = [
             Field(name="TotalField", source="@Total", source_type="formula", x=10.0, y=5.0),
             Field(name="TaxField", source="@Tax", source_type="formula", x=120.0, y=5.0),
-            Field(name="GrandTotalField", source="@GrandTotal", source_type="formula", x=230.0, y=5.0),
+            Field(
+                name="GrandTotalField", source="@GrandTotal", source_type="formula", x=230.0, y=5.0
+            ),
         ]
 
         section = Section(
-            name="Detail",
-            section_type=SectionType.DETAIL,
-            height=20.0,
-            fields=fields
+            name="Detail", section_type=SectionType.DETAIL, height=20.0, fields=fields
         )
 
         frame = self.layout_mapper._map_section(section, 600.0, [])
@@ -458,11 +417,7 @@ class TestErrorHandlingIntegration:
 
     def test_empty_formula_handling(self):
         """Test handling of empty formula."""
-        formula = Formula(
-            name="EmptyFormula",
-            expression="",
-            return_type=DataType.STRING
-        )
+        formula = Formula(name="EmptyFormula", expression="", return_type=DataType.STRING)
 
         translated = self.formula_translator.translate(formula)
 
@@ -485,10 +440,7 @@ class TestErrorHandlingIntegration:
         20 twips = 1.0 points.
         """
         section = Section(
-            name="EmptyDetail",
-            section_type=SectionType.DETAIL,
-            height=20.0,  # twips
-            fields=[]
+            name="EmptyDetail", section_type=SectionType.DETAIL, height=20.0, fields=[]  # twips
         )
 
         frame = self.layout_mapper._map_section(section, 600.0, [])
@@ -514,17 +466,13 @@ class TestComplexScenarios:
             Formula(
                 name="LineTotal",
                 expression="{Quantity} * {UnitPrice}",
-                return_type=DataType.CURRENCY
+                return_type=DataType.CURRENCY,
             ),
             Formula(
-                name="Tax",
-                expression="{LineTotal} * {TaxRate}",
-                return_type=DataType.CURRENCY
+                name="Tax", expression="{LineTotal} * {TaxRate}", return_type=DataType.CURRENCY
             ),
             Formula(
-                name="GrandTotal",
-                expression="{LineTotal} + {Tax}",
-                return_type=DataType.CURRENCY
+                name="GrandTotal", expression="{LineTotal} + {Tax}", return_type=DataType.CURRENCY
             ),
         ]
 
@@ -538,9 +486,7 @@ class TestComplexScenarios:
                 name="ReportHeader",
                 section_type=SectionType.REPORT_HEADER,
                 height=60.0,
-                fields=[
-                    Field(name="InvoiceTitle", source="'INVOICE'", x=250.0, y=10.0)
-                ]
+                fields=[Field(name="InvoiceTitle", source="'INVOICE'", x=250.0, y=10.0)],
             ),
             Section(
                 name="PageHeader",
@@ -551,7 +497,7 @@ class TestComplexScenarios:
                     Field(name="QtyHeader", source="'Qty'", x=150.0, y=5.0),
                     Field(name="PriceHeader", source="'Price'", x=200.0, y=5.0),
                     Field(name="TotalHeader", source="'Total'", x=250.0, y=5.0),
-                ]
+                ],
             ),
             Section(
                 name="Detail",
@@ -562,7 +508,7 @@ class TestComplexScenarios:
                     Field(name="Qty", source="QUANTITY", x=150.0, y=5.0),
                     Field(name="Price", source="UNIT_PRICE", x=200.0, y=5.0),
                     Field(name="Total", source="@LineTotal", source_type="formula", x=250.0, y=5.0),
-                ]
+                ],
             ),
             Section(
                 name="ReportFooter",
@@ -570,8 +516,14 @@ class TestComplexScenarios:
                 height=50.0,
                 fields=[
                     Field(name="GrandTotalLabel", source="'Grand Total:'", x=200.0, y=10.0),
-                    Field(name="GrandTotalValue", source="@GrandTotal", source_type="formula", x=270.0, y=10.0),
-                ]
+                    Field(
+                        name="GrandTotalValue",
+                        source="@GrandTotal",
+                        source_type="formula",
+                        x=270.0,
+                        y=10.0,
+                    ),
+                ],
             ),
         ]
 
@@ -593,12 +545,12 @@ class TestComplexScenarios:
             Formula(
                 name="DeptTotal",
                 expression="Sum({Amount}, {Department})",
-                return_type=DataType.CURRENCY
+                return_type=DataType.CURRENCY,
             ),
             Formula(
                 name="DeptAvg",
                 expression="Avg({Amount}, {Department})",
-                return_type=DataType.CURRENCY
+                return_type=DataType.CURRENCY,
             ),
         ]
 
@@ -612,9 +564,14 @@ class TestComplexScenarios:
                 group_number=1,
                 height=25.0,
                 fields=[
-                    Field(name="DeptName", source="DEPARTMENT", x=10.0, y=5.0,
-                          font=FontSpec(bold=True))
-                ]
+                    Field(
+                        name="DeptName",
+                        source="DEPARTMENT",
+                        x=10.0,
+                        y=5.0,
+                        font=FontSpec(bold=True),
+                    )
+                ],
             ),
             Section(
                 name="Detail",
@@ -622,9 +579,14 @@ class TestComplexScenarios:
                 height=18.0,
                 fields=[
                     Field(name="Employee", source="EMPLOYEE_NAME", x=20.0, y=4.0),
-                    Field(name="Salary", source="SALARY", x=200.0, y=4.0,
-                          format=FormatSpec(format_string="$#,##0.00")),
-                ]
+                    Field(
+                        name="Salary",
+                        source="SALARY",
+                        x=200.0,
+                        y=4.0,
+                        format=FormatSpec(format_string="$#,##0.00"),
+                    ),
+                ],
             ),
             Section(
                 name="GroupFooter",
@@ -633,8 +595,14 @@ class TestComplexScenarios:
                 height=25.0,
                 fields=[
                     Field(name="TotalLabel", source="'Department Total:'", x=120.0, y=5.0),
-                    Field(name="TotalValue", source="@DeptTotal", source_type="formula", x=200.0, y=5.0),
-                ]
+                    Field(
+                        name="TotalValue",
+                        source="@DeptTotal",
+                        source_type="formula",
+                        x=200.0,
+                        y=5.0,
+                    ),
+                ],
             ),
         ]
 
@@ -648,9 +616,7 @@ class TestComplexScenarios:
         """Test fields with conditional formatting using formulas."""
         # Suppression formula
         suppress_formula = Formula(
-            name="SuppressZero",
-            expression="{Amount} = 0",
-            return_type=DataType.BOOLEAN
+            name="SuppressZero", expression="{Amount} = 0", return_type=DataType.BOOLEAN
         )
 
         translated = self.formula_translator.translate(suppress_formula)
@@ -660,7 +626,7 @@ class TestComplexScenarios:
             source="AMOUNT",
             x=100.0,
             y=5.0,
-            suppress_condition="@SuppressZero"
+            suppress_condition="@SuppressZero",
         )
 
         oracle_field = self.layout_mapper._map_field(field)

@@ -4,9 +4,10 @@ Unit tests for FontMapper.
 Tests font mapping from Crystal Reports to Oracle Reports compatible fonts.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from src.transformation.font_mapper import FontMapper
 
@@ -186,15 +187,17 @@ class TestFontMapperConfig:
     def test_load_custom_config(self):
         """Test loading custom font mappings from YAML."""
         # Create a temporary config file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
-            f.write("""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(
+                """
 fonts:
   "Custom Font": "Helvetica"
   "Another Font": "Times"
 
 default_font: "Courier"
 default_size: 11
-""")
+"""
+            )
             config_path = f.name
 
         try:
@@ -224,7 +227,7 @@ default_size: 11
 
     def test_empty_config_file(self):
         """Test empty config file handling."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write("")
             config_path = f.name
 
