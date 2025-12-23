@@ -8,10 +8,10 @@
 # Configuration for extracting Crystal Reports RPT files to XML
 extraction:
   # Extraction mode: "docker", "java", or "dotnet"
-  # - docker: Use Docker container (recommended for macOS, works on all platforms)
-  # - java: Use Java SDK directly (requires Java 11+, works on Windows/Linux)
+  # - java: Use Java SDK directly (recommended, works on all platforms including macOS)
+  # - docker: Use Docker container (alternative, works on all platforms)
   # - dotnet: Use .NET Edition (Windows only)
-  mode: "docker"
+  mode: "java"
 
   # Docker settings (used when mode: "docker")
   docker:

@@ -86,13 +86,13 @@ The converter uses a 5-stage pipeline:
 
 | Stage | Component | Windows | Linux | macOS |
 |-------|-----------|---------|-------|-------|
+| **1. Extraction** | RptToXml (Java) | ✅ | ✅ | ✅ |
 | **1. Extraction** | RptToXml (Docker) | ✅ | ✅ | ✅ |
-| **1. Extraction** | RptToXml (Java native) | ✅ | ✅ | ❌ Use Docker |
 | **2-4. Transform** | Python pipeline | ✅ | ✅ | ✅ |
 | **5. RDF Generation** | Oracle rwconverter | ✅ | ✅ | ⚠️ Docker required |
 
-> **Note for macOS users**: The Crystal Reports Java SDK has path resolution issues on macOS.
-> Use the provided Docker container (`docker/rpttoxml/`) for the extraction step.
+> **Note**: The Java extraction now works natively on all platforms including macOS.
+> The wrapper script automatically handles the Crystal Reports SDK path resolution requirements.
 
 ## Installation
 
@@ -581,8 +581,7 @@ The data model transformation is still in development. The layout and structure 
 ## Known Limitations
 
 ### Platform Limitations
-- **macOS**: Crystal Reports Java SDK does not work natively. Use Docker.
-- **Oracle RDF Generation**: Requires Oracle Reports 12c (rwconverter utility)
+- **Oracle RDF Generation**: Requires Oracle Reports 12c (rwconverter utility) - use Docker on macOS
 
 ### Report Limitations
 - Subreports with more than 2 levels of nesting may require manual adjustment
