@@ -20,6 +20,11 @@ from .report_model import (
     Field,
     Group,
     SubreportReference,
+    Chart,
+    ChartType,
+    ChartDataSeries,
+    CrossTab,
+    CrossTabCell,
     ReportMetadata,
     FontSpec,
     FormatSpec,
@@ -129,12 +134,16 @@ class CrystalParser:
         self._parse_groups(root, model)
         self._parse_sections(root, model)
         self._parse_subreports(root, model)
+        self._parse_charts(root, model)
+        self._parse_crosstabs(root, model)
 
         self.logger.info(
             f"Parsed {model.name}: "
             f"{len(model.formulas)} formulas, "
             f"{len(model.parameters)} parameters, "
-            f"{len(model.sections)} sections"
+            f"{len(model.sections)} sections, "
+            f"{len(model.charts)} charts, "
+            f"{len(model.crosstabs)} crosstabs"
         )
 
         return model
@@ -163,6 +172,8 @@ class CrystalParser:
         self._parse_groups(root, model)
         self._parse_sections(root, model)
         self._parse_subreports(root, model)
+        self._parse_charts(root, model)
+        self._parse_crosstabs(root, model)
 
         return model
 
@@ -584,6 +595,238 @@ class CrystalParser:
                 model.add_conversion_note(
                     f"Subreport '{subreport.name}' has {len(subreport.links)} links - may need manual review"
                 )
+
+    def _parse_charts(self, root: ET.Element, model: ReportModel) -> None:
+        """Parse chart and graph objects.
+
+        Crystal Reports charts can be represented as:
+        - <Chart> elements
+        - <Graph> elements (older versions)
+        - <OLEObject> elements with chart type
+        """
+        # Chart type mapping from Crystal to our ChartType enum
+        chart_type_map = {
+            "bar": ChartType.BAR,
+            "barchart": ChartType.BAR,
+            "line": ChartType.LINE,
+            "linechart": ChartType.LINE,
+            "pie": ChartType.PIE,
+            "piechart": ChartType.PIE,
+            "area": ChartType.AREA,
+            "areachart": ChartType.AREA,
+            "scatter": ChartType.SCATTER,
+            "xy": ChartType.SCATTER,
+            "doughnut": ChartType.DOUGHNUT,
+            "bubble": ChartType.BUBBLE,
+            "stock": ChartType.STOCK,
+            "gauge": ChartType.GAUGE,
+            "funnel": ChartType.FUNNEL,
+            "radar": ChartType.RADAR,
+            "3dbar": ChartType.BAR,
+            "3dline": ChartType.LINE,
+            "3dpie": ChartType.PIE,
+        }
+
+        # Parse <Chart> elements
+        for chart_elem in root.findall(".//Chart"):
+            self._parse_single_chart(chart_elem, model, chart_type_map)
+
+        # Parse <Graph> elements (alternative element name)
+        for chart_elem in root.findall(".//Graph"):
+            self._parse_single_chart(chart_elem, model, chart_type_map)
+
+        # Check for charts embedded in OLE objects
+        for ole_elem in root.findall(".//OLEObject"):
+            ole_type = ole_elem.get("Type", "").lower()
+            if "chart" in ole_type or "graph" in ole_type:
+                self._parse_single_chart(ole_elem, model, chart_type_map)
+
+    def _parse_single_chart(
+        self,
+        elem: ET.Element,
+        model: ReportModel,
+        chart_type_map: Dict[str, ChartType],
+    ) -> None:
+        """Parse a single chart element."""
+        name = elem.get("Name", f"Chart_{len(model.charts) + 1}")
+
+        # Determine chart type
+        chart_type_str = elem.get("ChartType", elem.get("Type", "bar")).lower()
+        # Check for 3D variants
+        is_3d = "3d" in chart_type_str or elem.get("Is3D", "false").lower() == "true"
+        # Remove 3d prefix for type lookup
+        chart_type_str = chart_type_str.replace("3d", "")
+        chart_type = chart_type_map.get(chart_type_str, ChartType.UNKNOWN)
+
+        # Create chart object
+        chart = Chart(
+            name=name,
+            chart_type=chart_type,
+            x=self._parse_dimension(elem.get("X", elem.get("Left", "0"))),
+            y=self._parse_dimension(elem.get("Y", elem.get("Top", "0"))),
+            width=self._parse_dimension(elem.get("Width", "0")),
+            height=self._parse_dimension(elem.get("Height", "0")),
+            is_3d=is_3d,
+        )
+
+        # Parse title elements
+        title_elem = elem.find(".//Title")
+        if title_elem is not None:
+            chart.title = title_elem.get("Text", title_elem.text)
+
+        subtitle_elem = elem.find(".//Subtitle")
+        if subtitle_elem is not None:
+            chart.subtitle = subtitle_elem.get("Text", subtitle_elem.text)
+
+        # Parse legend settings
+        legend_elem = elem.find(".//Legend")
+        if legend_elem is not None:
+            chart.show_legend = legend_elem.get("Visible", "true").lower() == "true"
+            chart.legend_position = legend_elem.get("Position", "right").lower()
+
+        # Parse data configuration
+        data_elem = elem.find(".//ChartData")
+        if data_elem is not None:
+            chart.category_field = data_elem.get("CategoryField", data_elem.get("OnChangeOf"))
+            chart.group_field = data_elem.get("GroupField")
+
+        # Parse data series
+        for series_elem in elem.findall(".//DataSeries") + elem.findall(".//Series"):
+            series_name = series_elem.get("Name", f"Series_{len(chart.data_series) + 1}")
+            field_name = series_elem.get("Field", series_elem.get("DataField", ""))
+
+            series = ChartDataSeries(
+                name=series_name,
+                field_name=field_name,
+                color=series_elem.get("Color"),
+                legend_text=series_elem.get("LegendText"),
+                show_values=series_elem.get("ShowValues", "false").lower() == "true",
+                value_format=series_elem.get("Format"),
+            )
+            chart.data_series.append(series)
+
+        # Parse appearance settings
+        chart.background_color = elem.get("BackgroundColor", elem.get("BgColor"))
+        chart.border_color = elem.get("BorderColor")
+        chart.show_grid_lines = elem.get("ShowGridLines", "true").lower() == "true"
+
+        # Get section name if embedded in a section
+        parent = elem
+        while parent is not None:
+            if parent.tag in ["Section", "ReportSection"]:
+                chart.section_name = parent.get("Name", parent.get("SectionType"))
+                break
+            # ElementTree doesn't provide parent, so this won't work directly
+            # We'll rely on the section name being set elsewhere or leave it None
+            break
+
+        model.charts.append(chart)
+
+        # Note chart presence (charts often need manual adjustment)
+        if chart.chart_type == ChartType.UNKNOWN:
+            model.add_conversion_note(
+                f"Chart '{name}' has unknown type '{chart_type_str}' - manual review required"
+            )
+
+    def _parse_crosstabs(self, root: ET.Element, model: ReportModel) -> None:
+        """Parse cross-tab (pivot table) objects.
+
+        Crystal Reports cross-tabs can be represented as:
+        - <CrossTab> elements
+        - <CrossTabObject> elements
+        - <Matrix> elements (alternative naming)
+        """
+        # Parse <CrossTab> elements
+        for ct_elem in root.findall(".//CrossTab"):
+            self._parse_single_crosstab(ct_elem, model)
+
+        # Parse <CrossTabObject> elements
+        for ct_elem in root.findall(".//CrossTabObject"):
+            self._parse_single_crosstab(ct_elem, model)
+
+        # Parse <Matrix> elements (alternative element name)
+        for ct_elem in root.findall(".//Matrix"):
+            self._parse_single_crosstab(ct_elem, model)
+
+    def _parse_single_crosstab(self, elem: ET.Element, model: ReportModel) -> None:
+        """Parse a single cross-tab element."""
+        name = elem.get("Name", f"CrossTab_{len(model.crosstabs) + 1}")
+
+        # Create cross-tab object
+        crosstab = CrossTab(
+            name=name,
+            x=self._parse_dimension(elem.get("X", elem.get("Left", "0"))),
+            y=self._parse_dimension(elem.get("Y", elem.get("Top", "0"))),
+            width=self._parse_dimension(elem.get("Width", "0")),
+            height=self._parse_dimension(elem.get("Height", "0")),
+        )
+
+        # Parse row fields (fields used as row headers)
+        for row_elem in elem.findall(".//RowField") + elem.findall(".//RowGroup"):
+            field_name = row_elem.get("Name", row_elem.get("FieldName", ""))
+            if field_name:
+                crosstab.row_fields.append(field_name)
+
+        # Alternative structure: Rows element containing Field elements
+        rows_elem = elem.find(".//Rows")
+        if rows_elem is not None:
+            for field_elem in rows_elem.findall(".//Field"):
+                field_name = field_elem.get("Name", field_elem.text or "")
+                if field_name and field_name not in crosstab.row_fields:
+                    crosstab.row_fields.append(field_name)
+
+        # Parse column fields (fields used as column headers)
+        for col_elem in elem.findall(".//ColumnField") + elem.findall(".//ColumnGroup"):
+            field_name = col_elem.get("Name", col_elem.get("FieldName", ""))
+            if field_name:
+                crosstab.column_fields.append(field_name)
+
+        # Alternative structure: Columns element containing Field elements
+        cols_elem = elem.find(".//Columns")
+        if cols_elem is not None:
+            for field_elem in cols_elem.findall(".//Field"):
+                field_name = field_elem.get("Name", field_elem.text or "")
+                if field_name and field_name not in crosstab.column_fields:
+                    crosstab.column_fields.append(field_name)
+
+        # Parse summary cells (the aggregated values)
+        summary_type_map = {
+            "sum": "sum",
+            "count": "count",
+            "average": "avg",
+            "avg": "avg",
+            "minimum": "min",
+            "min": "min",
+            "maximum": "max",
+            "max": "max",
+            "distinctcount": "count_distinct",
+        }
+
+        for cell_elem in elem.findall(".//SummaryField") + elem.findall(".//Cell"):
+            cell_name = cell_elem.get("Name", f"Cell_{len(crosstab.summary_cells) + 1}")
+            field_name = cell_elem.get("FieldName", cell_elem.get("Field", ""))
+            summary_type_str = cell_elem.get("SummaryType", cell_elem.get("Operation", "sum")).lower()
+            summary_type = summary_type_map.get(summary_type_str, "sum")
+
+            cell = CrossTabCell(
+                name=cell_name,
+                field_name=field_name,
+                summary_type=summary_type,
+                format_string=cell_elem.get("Format"),
+            )
+            crosstab.summary_cells.append(cell)
+
+        # Parse totals settings
+        crosstab.show_row_totals = elem.get("ShowRowTotals", "true").lower() == "true"
+        crosstab.show_column_totals = elem.get("ShowColumnTotals", "true").lower() == "true"
+        crosstab.show_grand_total = elem.get("ShowGrandTotal", "true").lower() == "true"
+
+        model.crosstabs.append(crosstab)
+
+        # Note cross-tab presence (always needs review)
+        model.add_conversion_note(
+            f"Cross-tab '{name}' detected - Oracle Reports uses matrix layout; manual review required"
+        )
 
     # Helper methods
 

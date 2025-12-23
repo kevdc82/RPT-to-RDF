@@ -8,7 +8,12 @@ import xml.etree.ElementTree as ET
 from typing import Optional
 from xml.dom import minidom
 
-from ..transformation.transformer import TransformedReport, TransformedSubreport
+from ..transformation.transformer import (
+    TransformedReport,
+    TransformedSubreport,
+    TransformedChart,
+    TransformedCrossTab,
+)
 from ..transformation.layout_mapper import OracleLayout, OracleFrame, OracleField
 from ..transformation.formula_translator import TranslatedFormula
 from ..transformation.parameter_mapper import OracleParameter
@@ -61,6 +66,14 @@ class OracleXMLGenerator:
         # Generate subreports section
         if report.subreports:
             self._generate_subreports(root, report.subreports)
+
+        # Generate charts section
+        if report.charts:
+            self._generate_charts(root, report.charts)
+
+        # Generate cross-tabs section
+        if report.crosstabs:
+            self._generate_crosstabs(root, report.crosstabs)
 
         # Convert to string with pretty printing
         xml_string = self._prettify(root)
@@ -410,6 +423,273 @@ end RUN_{sr.oracle_name};"""
             # Add comment about original subreport
             comment = ET.SubElement(proc, "comment")
             comment.text = f"Helper procedure for subreport: {sr.name}"
+
+    def _generate_charts(
+        self,
+        root: ET.Element,
+        charts: list[TransformedChart],
+    ) -> None:
+        """Generate chart object definitions.
+
+        Oracle Reports uses the Oracle BI Graph bean for charts.
+        This generates chart placeholder elements and configuration that
+        can be implemented using the BI Graph API.
+        """
+        if not charts:
+            return
+
+        # Add comment for charts section
+        comment = ET.Comment(f" CHARTS: {len(charts)} chart object(s) ")
+        root.append(comment)
+
+        # Create charts section
+        charts_section = ET.SubElement(root, "charts")
+
+        for chart in charts:
+            # Create chart element
+            chart_elem = ET.SubElement(charts_section, "chart", {
+                "name": chart.oracle_name,
+                "originalName": chart.name,
+                "chartType": chart.chart_type,
+            })
+
+            # Position and size
+            ET.SubElement(chart_elem, "position", {
+                "x": str(int(chart.x)),
+                "y": str(int(chart.y)),
+                "width": str(int(chart.width)),
+                "height": str(int(chart.height)),
+            })
+
+            # Data configuration
+            data_config = ET.SubElement(chart_elem, "dataConfig")
+            if chart.category_column:
+                ET.SubElement(data_config, "categoryColumn", {
+                    "name": chart.category_column,
+                })
+            if chart.value_columns:
+                for col in chart.value_columns:
+                    ET.SubElement(data_config, "valueColumn", {
+                        "name": col,
+                    })
+            if chart.group_column:
+                ET.SubElement(data_config, "groupColumn", {
+                    "name": chart.group_column,
+                })
+
+            # Appearance
+            appearance = ET.SubElement(chart_elem, "appearance")
+            if chart.title:
+                ET.SubElement(appearance, "title", {"text": chart.title})
+            ET.SubElement(appearance, "legend", {
+                "position": chart.legend_position,
+            })
+            if chart.is_3d:
+                appearance.set("is3D", "yes")
+
+            # Add warnings as comments
+            for warning in chart.warnings:
+                warn_comment = ET.Comment(f" WARNING: {warning} ")
+                chart_elem.append(warn_comment)
+
+        # Generate PL/SQL code for chart initialization
+        self._generate_chart_procedures(root, charts)
+
+    def _generate_chart_procedures(
+        self,
+        root: ET.Element,
+        charts: list[TransformedChart],
+    ) -> None:
+        """Generate PL/SQL procedures for initializing charts.
+
+        These procedures use the OG (Oracle Graphics) package to
+        configure chart properties at runtime.
+        """
+        # Find or create program units section
+        program_units = root.find("programUnits")
+        if program_units is None:
+            program_units = ET.SubElement(root, "programUnits")
+
+        for chart in charts:
+            proc = ET.SubElement(program_units, "procedure", {
+                "name": f"INIT_{chart.oracle_name}",
+            })
+
+            # Build column list for OG.SetData
+            value_cols = ", ".join(f"'{col}'" for col in chart.value_columns) or "'VALUE'"
+            category_col = f"'{chart.category_column}'" if chart.category_column else "'CATEGORY'"
+
+            # Generate the procedure code
+            plsql_code = f"""procedure INIT_{chart.oracle_name} is
+  -- Initialize chart: {chart.name}
+  -- Chart Type: {chart.chart_type}
+begin
+  -- TODO: Implement using Oracle BI Graph API
+  -- Example using OG package:
+  /*
+  OG.SetChartType('{chart.oracle_name}', '{chart.chart_type}');
+  OG.SetDataQuery('{chart.oracle_name}',
+    'SELECT {chart.category_column or 'CATEGORY'} category, '
+    || '{', '.join(chart.value_columns) or 'VALUE'} value '
+    || 'FROM your_data_source');
+  {"OG.Set3D('" + chart.oracle_name + "', TRUE);" if chart.is_3d else ""}
+  {"OG.SetTitle('" + chart.oracle_name + "', '" + (chart.title or '') + "');" if chart.title else ""}
+  OG.SetLegendPosition('{chart.oracle_name}', '{chart.legend_position.upper()}');
+  */
+  NULL; -- Placeholder: implement chart initialization
+end INIT_{chart.oracle_name};"""
+
+            source = ET.SubElement(proc, "textSource")
+            source.text = plsql_code
+
+            # Add comment about original chart
+            comment = ET.SubElement(proc, "comment")
+            comment.text = f"Initialization procedure for chart: {chart.name}"
+
+    def _generate_crosstabs(
+        self,
+        root: ET.Element,
+        crosstabs: list[TransformedCrossTab],
+    ) -> None:
+        """Generate cross-tab (matrix) definitions.
+
+        Oracle Reports uses matrix layouts for cross-tab reports.
+        This generates cross-tab placeholder elements and configuration
+        that can be implemented using Oracle Reports matrix layout.
+        """
+        if not crosstabs:
+            return
+
+        # Add comment for cross-tabs section
+        comment = ET.Comment(f" CROSS-TABS: {len(crosstabs)} matrix object(s) ")
+        root.append(comment)
+
+        # Create cross-tabs section
+        crosstabs_section = ET.SubElement(root, "crosstabs")
+
+        for ct in crosstabs:
+            # Create cross-tab element
+            ct_elem = ET.SubElement(crosstabs_section, "crosstab", {
+                "name": ct.oracle_name,
+                "originalName": ct.name,
+            })
+
+            # Position and size
+            ET.SubElement(ct_elem, "position", {
+                "x": str(int(ct.x)),
+                "y": str(int(ct.y)),
+                "width": str(int(ct.width)),
+                "height": str(int(ct.height)),
+            })
+
+            # Row dimensions
+            if ct.row_columns:
+                rows_elem = ET.SubElement(ct_elem, "rowDimensions")
+                for col in ct.row_columns:
+                    ET.SubElement(rows_elem, "dimension", {"column": col})
+
+            # Column dimensions
+            if ct.column_columns:
+                cols_elem = ET.SubElement(ct_elem, "columnDimensions")
+                for col in ct.column_columns:
+                    ET.SubElement(cols_elem, "dimension", {"column": col})
+
+            # Summary measures
+            if ct.summary_columns:
+                measures_elem = ET.SubElement(ct_elem, "measures")
+                for summary in ct.summary_columns:
+                    ET.SubElement(measures_elem, "measure", {
+                        "name": summary.get("name", ""),
+                        "column": summary.get("column", ""),
+                        "function": summary.get("function", "SUM"),
+                    })
+
+            # Totals configuration
+            ET.SubElement(ct_elem, "totals", {
+                "showRowTotals": "yes" if ct.show_row_totals else "no",
+                "showColumnTotals": "yes" if ct.show_column_totals else "no",
+                "showGrandTotal": "yes" if ct.show_grand_total else "no",
+            })
+
+            # Add warnings as comments
+            for warning in ct.warnings:
+                warn_comment = ET.Comment(f" WARNING: {warning} ")
+                ct_elem.append(warn_comment)
+
+        # Generate matrix query helper
+        self._generate_crosstab_queries(root, crosstabs)
+
+    def _generate_crosstab_queries(
+        self,
+        root: ET.Element,
+        crosstabs: list[TransformedCrossTab],
+    ) -> None:
+        """Generate SQL queries for cross-tab data.
+
+        These queries use PIVOT syntax (Oracle 11g+) or DECODE for
+        cross-tab matrix data.
+        """
+        # Find or create program units section
+        program_units = root.find("programUnits")
+        if program_units is None:
+            program_units = ET.SubElement(root, "programUnits")
+
+        for ct in crosstabs:
+            proc = ET.SubElement(program_units, "procedure", {
+                "name": f"QUERY_{ct.oracle_name}",
+            })
+
+            # Build column lists
+            row_cols = ", ".join(ct.row_columns) if ct.row_columns else "ROW_DIM"
+            col_cols = ", ".join(ct.column_columns) if ct.column_columns else "COL_DIM"
+
+            # Build aggregation expressions
+            agg_exprs = []
+            for summary in ct.summary_columns:
+                func = summary.get("function", "SUM")
+                col = summary.get("column", "VALUE")
+                agg_exprs.append(f"{func}({col}) AS {col}_AGG")
+            agg_list = ", ".join(agg_exprs) if agg_exprs else "SUM(VALUE) AS VALUE_AGG"
+
+            # Generate the procedure code with sample PIVOT query
+            plsql_code = f"""procedure QUERY_{ct.oracle_name} is
+  -- Cross-tab query for: {ct.name}
+  -- Row dimensions: {row_cols}
+  -- Column dimensions: {col_cols}
+begin
+  -- TODO: Implement cross-tab query using one of these approaches:
+  --
+  -- Option 1: Oracle PIVOT (11g+)
+  /*
+  SELECT *
+  FROM (
+    SELECT {row_cols}, {col_cols}, {agg_list}
+    FROM your_source_table
+    GROUP BY {row_cols}, {col_cols}
+  )
+  PIVOT (
+    {agg_list}
+    FOR {col_cols} IN (/* distinct column values */)
+  );
+  */
+  --
+  -- Option 2: DECODE method (pre-11g)
+  /*
+  SELECT {row_cols},
+         SUM(DECODE({col_cols}, 'value1', measure, 0)) AS col_value1,
+         SUM(DECODE({col_cols}, 'value2', measure, 0)) AS col_value2
+  FROM your_source_table
+  GROUP BY {row_cols};
+  */
+  NULL; -- Placeholder: implement cross-tab query
+end QUERY_{ct.oracle_name};"""
+
+            source = ET.SubElement(proc, "textSource")
+            source.text = plsql_code
+
+            # Add comment about original cross-tab
+            comment = ET.SubElement(proc, "comment")
+            comment.text = f"Query procedure for cross-tab: {ct.name}"
 
     def _map_datatype(self, oracle_type: str) -> str:
         """Map Oracle type to Oracle Reports datatype attribute.

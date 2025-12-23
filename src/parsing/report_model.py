@@ -346,6 +346,168 @@ class SubreportReference:
 
 
 @dataclass
+class CrossTabCell:
+    """A cell definition in a cross-tab report."""
+    name: str
+    field_name: str  # The field being summarized
+    summary_type: str = "sum"  # sum, count, avg, min, max, etc.
+    format_string: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "field_name": self.field_name,
+            "summary_type": self.summary_type,
+            "format_string": self.format_string,
+        }
+
+
+@dataclass
+class CrossTab:
+    """Cross-tab (pivot table) object in a report."""
+    name: str
+
+    # Position and size
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+    # Row fields (row headers)
+    row_fields: list[str] = field(default_factory=list)
+
+    # Column fields (column headers)
+    column_fields: list[str] = field(default_factory=list)
+
+    # Summary cells (the data being aggregated)
+    summary_cells: list[CrossTabCell] = field(default_factory=list)
+
+    # Totals
+    show_row_totals: bool = True
+    show_column_totals: bool = True
+    show_grand_total: bool = True
+
+    # Section it belongs to
+    section_name: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "row_fields": self.row_fields,
+            "column_fields": self.column_fields,
+            "summary_cells": [c.to_dict() for c in self.summary_cells],
+            "show_row_totals": self.show_row_totals,
+            "show_column_totals": self.show_column_totals,
+            "show_grand_total": self.show_grand_total,
+            "section_name": self.section_name,
+        }
+
+
+class ChartType(Enum):
+    """Types of charts supported."""
+    BAR = "bar"
+    LINE = "line"
+    PIE = "pie"
+    AREA = "area"
+    SCATTER = "scatter"
+    DOUGHNUT = "doughnut"
+    BUBBLE = "bubble"
+    STOCK = "stock"
+    GAUGE = "gauge"
+    FUNNEL = "funnel"
+    RADAR = "radar"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class ChartDataSeries:
+    """Data series for a chart."""
+    name: str
+    field_name: str  # Source field for values
+    color: Optional[str] = None
+    legend_text: Optional[str] = None
+    show_values: bool = False
+    value_format: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "field_name": self.field_name,
+            "color": self.color,
+            "legend_text": self.legend_text,
+            "show_values": self.show_values,
+            "value_format": self.value_format,
+        }
+
+
+@dataclass
+class Chart:
+    """Chart or graph object in a report."""
+    name: str
+    chart_type: ChartType = ChartType.BAR
+
+    # Position and size (in twips typically)
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+    # Data
+    category_field: Optional[str] = None  # X-axis or category labels
+    data_series: list[ChartDataSeries] = field(default_factory=list)
+    group_field: Optional[str] = None  # For grouped charts
+
+    # Appearance
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    legend_position: str = "right"  # top, bottom, left, right, none
+    show_legend: bool = True
+    show_grid_lines: bool = True
+
+    # 3D settings
+    is_3d: bool = False
+    depth_percent: int = 100
+
+    # Colors
+    background_color: Optional[str] = None
+    border_color: Optional[str] = None
+
+    # Section it belongs to
+    section_name: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "chart_type": self.chart_type.value,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "category_field": self.category_field,
+            "data_series": [ds.to_dict() for ds in self.data_series],
+            "group_field": self.group_field,
+            "title": self.title,
+            "subtitle": self.subtitle,
+            "legend_position": self.legend_position,
+            "show_legend": self.show_legend,
+            "show_grid_lines": self.show_grid_lines,
+            "is_3d": self.is_3d,
+            "depth_percent": self.depth_percent,
+            "background_color": self.background_color,
+            "border_color": self.border_color,
+            "section_name": self.section_name,
+        }
+
+
+@dataclass
 class ReportMetadata:
     """Report metadata and properties."""
     title: Optional[str] = None
@@ -412,6 +574,12 @@ class ReportModel:
     # Subreports
     subreports: list[SubreportReference] = field(default_factory=list)
 
+    # Charts and graphs
+    charts: list[Chart] = field(default_factory=list)
+
+    # Cross-tabs (pivot tables)
+    crosstabs: list[CrossTab] = field(default_factory=list)
+
     # Metadata
     metadata: ReportMetadata = field(default_factory=ReportMetadata)
 
@@ -431,6 +599,8 @@ class ReportModel:
             "sections": [s.to_dict() for s in self.sections],
             "groups": [g.to_dict() for g in self.groups],
             "subreports": [sr.to_dict() for sr in self.subreports],
+            "charts": [c.to_dict() for c in self.charts],
+            "crosstabs": [ct.to_dict() for ct in self.crosstabs],
             "metadata": self.metadata.to_dict(),
             "conversion_notes": self.conversion_notes,
             "unsupported_features": self.unsupported_features,

@@ -13,17 +13,6 @@ This document tracks remaining work items and future enhancements for the Crysta
 
 ## Medium Priority
 
-### Enhanced Report Features
-
-- [ ] **Chart and graph support**
-  - Extract chart definitions from Crystal Reports
-  - Map to Oracle Reports chart objects
-  - Handle chart data series and formatting
-
-- [ ] **Cross-tab reports**
-  - Parse cross-tab structure from Crystal XML
-  - Generate Oracle Reports matrix/cross-tab equivalent
-
 ### Testing
 - [ ] **Validation framework**
   - Compare Crystal and Oracle report output
@@ -139,6 +128,24 @@ This document tracks remaining work items and future enhancements for the Crysta
 - [x] Subreport transformation (TransformedSubreport model)
 - [x] Subreport XML generation with parameter links
 - [x] SRW.RUN_REPORT helper procedure stubs
+
+### Phase 9: Chart Support ✅
+- [x] Chart and ChartDataSeries models in report_model.py
+- [x] Chart type enum (bar, line, pie, area, scatter, etc.)
+- [x] Chart parsing from Crystal XML (_parse_charts)
+- [x] TransformedChart model in transformer
+- [x] Chart transformation with Oracle BI Graph type mapping
+- [x] Oracle XML chart generation with data config
+- [x] Chart initialization procedures (INIT_CH_*)
+
+### Phase 10: Cross-Tab Support ✅
+- [x] CrossTab and CrossTabCell models in report_model.py
+- [x] Cross-tab parsing from Crystal XML (_parse_crosstabs)
+- [x] TransformedCrossTab model in transformer
+- [x] Summary function mapping (SUM, COUNT, AVG, etc.)
+- [x] Oracle Reports matrix layout generation
+- [x] PIVOT/DECODE query generation for cross-tab data
+- [x] Row/column totals and grand total support
 
 ---
 

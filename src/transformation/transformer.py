@@ -19,6 +19,94 @@ from ..utils.error_handler import ErrorHandler, ErrorCategory
 
 
 @dataclass
+class TransformedCrossTab:
+    """Transformed cross-tab for Oracle Reports matrix layout."""
+
+    name: str
+    oracle_name: str
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+    # Dimension columns
+    row_columns: list[str] = field(default_factory=list)
+    column_columns: list[str] = field(default_factory=list)
+
+    # Summary definitions
+    summary_columns: list[dict] = field(default_factory=list)  # [{name, column, function}]
+
+    # Totals
+    show_row_totals: bool = True
+    show_column_totals: bool = True
+    show_grand_total: bool = True
+
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "oracle_name": self.oracle_name,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "row_columns": self.row_columns,
+            "column_columns": self.column_columns,
+            "summary_columns": self.summary_columns,
+            "show_row_totals": self.show_row_totals,
+            "show_column_totals": self.show_column_totals,
+            "show_grand_total": self.show_grand_total,
+            "warnings": self.warnings,
+        }
+
+
+@dataclass
+class TransformedChart:
+    """Transformed chart for Oracle Reports."""
+
+    name: str
+    oracle_name: str
+    chart_type: str  # bar, line, pie, etc.
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 0.0
+    height: float = 0.0
+
+    # Data configuration
+    category_column: Optional[str] = None
+    value_columns: list[str] = field(default_factory=list)
+    group_column: Optional[str] = None
+
+    # Appearance
+    title: Optional[str] = None
+    legend_position: str = "right"
+    is_3d: bool = False
+
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            "name": self.name,
+            "oracle_name": self.oracle_name,
+            "chart_type": self.chart_type,
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "category_column": self.category_column,
+            "value_columns": self.value_columns,
+            "group_column": self.group_column,
+            "title": self.title,
+            "legend_position": self.legend_position,
+            "is_3d": self.is_3d,
+            "warnings": self.warnings,
+        }
+
+
+@dataclass
 class TransformedSubreport:
     """Transformed subreport reference for Oracle Reports."""
 
@@ -69,6 +157,8 @@ class TransformedReport:
     format_triggers: list[FormatTrigger] = field(default_factory=list)
     layout: Optional[OracleLayout] = None
     subreports: list[TransformedSubreport] = field(default_factory=list)
+    charts: list[TransformedChart] = field(default_factory=list)
+    crosstabs: list[TransformedCrossTab] = field(default_factory=list)
 
     # Metadata
     success: bool = True
@@ -93,6 +183,8 @@ class TransformedReport:
             "format_triggers": [ft.to_dict() for ft in self.format_triggers],
             "layout": self.layout.to_dict() if self.layout else None,
             "subreports": [sr.to_dict() for sr in self.subreports],
+            "charts": [c.to_dict() for c in self.charts],
+            "crosstabs": [ct.to_dict() for ct in self.crosstabs],
             "success": self.success,
             "warnings": self.warnings,
             "errors": self.errors,
@@ -222,6 +314,18 @@ class Transformer:
             if report.subreports:
                 stage_logger.start_stage("subreports", f"{len(report.subreports)} subreports")
                 result.subreports = self._transform_subreports(report, result)
+                stage_logger.end_stage(True)
+
+            # Stage 7: Transform charts
+            if report.charts:
+                stage_logger.start_stage("charts", f"{len(report.charts)} charts")
+                result.charts = self._transform_charts(report, result)
+                stage_logger.end_stage(True)
+
+            # Stage 8: Transform cross-tabs
+            if report.crosstabs:
+                stage_logger.start_stage("crosstabs", f"{len(report.crosstabs)} cross-tabs")
+                result.crosstabs = self._transform_crosstabs(report, result)
                 stage_logger.end_stage(True)
 
             # Add conversion notes from original report
@@ -488,4 +592,230 @@ class Transformer:
         # Add prefix if not present
         if not oracle_name.upper().startswith("SR_"):
             oracle_name = "SR_" + oracle_name
+        return oracle_name.upper()
+
+    def _transform_charts(
+        self,
+        report: ReportModel,
+        result: TransformedReport,
+    ) -> list[TransformedChart]:
+        """Transform chart objects.
+
+        Oracle Reports supports charts through:
+        1. Oracle BI Graph bean (OG/BI Graph)
+        2. Java bean charts
+        3. OLE objects
+
+        This transformation creates Oracle-compatible chart definitions
+        that can be implemented using Oracle BI Graph or similar.
+        """
+        charts = []
+
+        # Chart type mapping (Crystal → Oracle BI Graph types)
+        chart_type_map = {
+            "bar": "BAR_VERT_CLUST",
+            "line": "LINE",
+            "pie": "PIE",
+            "area": "AREA_VERT_ABS",
+            "scatter": "SCATTER",
+            "doughnut": "PIE_RING",
+            "bubble": "BUBBLE",
+            "stock": "STOCK_CANDLE",
+            "gauge": "GAUGE",
+            "funnel": "FUNNEL",
+            "radar": "RADAR",
+        }
+
+        for chart in report.charts:
+            try:
+                # Create Oracle-compatible name
+                oracle_name = self._make_oracle_chart_name(chart.name)
+
+                # Map chart type
+                oracle_type = chart_type_map.get(
+                    chart.chart_type.value,
+                    "BAR_VERT_CLUST"  # Default to bar chart
+                )
+
+                # Extract value columns from data series
+                value_columns = []
+                for series in chart.data_series:
+                    if series.field_name:
+                        # Clean up field name
+                        col_name = series.field_name.replace("{", "").replace("}", "")
+                        if "." in col_name:
+                            col_name = col_name.split(".")[-1]
+                        value_columns.append(col_name.upper())
+
+                # Clean category field
+                category_col = None
+                if chart.category_field:
+                    category_col = chart.category_field.replace("{", "").replace("}", "")
+                    if "." in category_col:
+                        category_col = category_col.split(".")[-1]
+                    category_col = category_col.upper()
+
+                # Clean group field
+                group_col = None
+                if chart.group_field:
+                    group_col = chart.group_field.replace("{", "").replace("}", "")
+                    if "." in group_col:
+                        group_col = group_col.split(".")[-1]
+                    group_col = group_col.upper()
+
+                warnings = []
+
+                # Check for 3D (Oracle BI Graph supports 3D differently)
+                if chart.is_3d:
+                    warnings.append("3D chart style may need manual adjustment in Oracle")
+
+                transformed = TransformedChart(
+                    name=chart.name,
+                    oracle_name=oracle_name,
+                    chart_type=oracle_type,
+                    x=chart.x,
+                    y=chart.y,
+                    width=chart.width,
+                    height=chart.height,
+                    category_column=category_col,
+                    value_columns=value_columns,
+                    group_column=group_col,
+                    title=chart.title,
+                    legend_position=chart.legend_position,
+                    is_3d=chart.is_3d,
+                    warnings=warnings,
+                )
+
+                charts.append(transformed)
+                result.elements_converted += 1
+
+                # Add note about chart conversion
+                result.conversion_notes.append(
+                    f"Chart '{chart.name}' ({chart.chart_type.value}) converted - "
+                    "implement using Oracle BI Graph or Java bean"
+                )
+
+            except Exception as e:
+                result.warnings.append(f"Chart '{chart.name}': {e}")
+                result.elements_with_issues += 1
+
+        return charts
+
+    def _make_oracle_chart_name(self, name: str) -> str:
+        """Create Oracle-compatible chart name."""
+        import re
+        # Remove invalid characters
+        oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+        # Ensure starts with letter
+        if oracle_name and oracle_name[0].isdigit():
+            oracle_name = "CH_" + oracle_name
+        # Add prefix if not present
+        if not oracle_name.upper().startswith("CH_"):
+            oracle_name = "CH_" + oracle_name
+        return oracle_name.upper()
+
+    def _transform_crosstabs(
+        self,
+        report: ReportModel,
+        result: TransformedReport,
+    ) -> list[TransformedCrossTab]:
+        """Transform cross-tab objects.
+
+        Oracle Reports uses matrix layouts for cross-tab reports.
+        This transformation creates Oracle-compatible cross-tab definitions
+        that can be implemented using Oracle Reports matrix layout.
+        """
+        crosstabs = []
+
+        # Summary function mapping (Crystal → Oracle)
+        summary_map = {
+            "sum": "SUM",
+            "count": "COUNT",
+            "avg": "AVG",
+            "min": "MIN",
+            "max": "MAX",
+            "count_distinct": "COUNT(DISTINCT)",
+        }
+
+        for ct in report.crosstabs:
+            try:
+                # Create Oracle-compatible name
+                oracle_name = self._make_oracle_crosstab_name(ct.name)
+
+                # Clean up row column names
+                row_columns = []
+                for field in ct.row_fields:
+                    col = field.replace("{", "").replace("}", "")
+                    if "." in col:
+                        col = col.split(".")[-1]
+                    row_columns.append(col.upper())
+
+                # Clean up column column names
+                column_columns = []
+                for field in ct.column_fields:
+                    col = field.replace("{", "").replace("}", "")
+                    if "." in col:
+                        col = col.split(".")[-1]
+                    column_columns.append(col.upper())
+
+                # Transform summary cells
+                summary_columns = []
+                for cell in ct.summary_cells:
+                    col_name = cell.field_name.replace("{", "").replace("}", "")
+                    if "." in col_name:
+                        col_name = col_name.split(".")[-1]
+
+                    summary_columns.append({
+                        "name": cell.name,
+                        "column": col_name.upper(),
+                        "function": summary_map.get(cell.summary_type, "SUM"),
+                        "format": cell.format_string,
+                    })
+
+                warnings = [
+                    "Cross-tab requires Oracle Reports matrix layout - manual implementation required"
+                ]
+
+                transformed = TransformedCrossTab(
+                    name=ct.name,
+                    oracle_name=oracle_name,
+                    x=ct.x,
+                    y=ct.y,
+                    width=ct.width,
+                    height=ct.height,
+                    row_columns=row_columns,
+                    column_columns=column_columns,
+                    summary_columns=summary_columns,
+                    show_row_totals=ct.show_row_totals,
+                    show_column_totals=ct.show_column_totals,
+                    show_grand_total=ct.show_grand_total,
+                    warnings=warnings,
+                )
+
+                crosstabs.append(transformed)
+                result.elements_converted += 1
+
+                # Add note about cross-tab conversion
+                result.conversion_notes.append(
+                    f"Cross-tab '{ct.name}' with {len(row_columns)} row fields, "
+                    f"{len(column_columns)} column fields - implement using matrix layout"
+                )
+
+            except Exception as e:
+                result.warnings.append(f"Cross-tab '{ct.name}': {e}")
+                result.elements_with_issues += 1
+
+        return crosstabs
+
+    def _make_oracle_crosstab_name(self, name: str) -> str:
+        """Create Oracle-compatible cross-tab name."""
+        import re
+        # Remove invalid characters
+        oracle_name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+        # Ensure starts with letter
+        if oracle_name and oracle_name[0].isdigit():
+            oracle_name = "CT_" + oracle_name
+        # Add prefix if not present
+        if not oracle_name.upper().startswith("CT_"):
+            oracle_name = "CT_" + oracle_name
         return oracle_name.upper()
