@@ -3,20 +3,290 @@ Error handling and reporting for RPT to RDF Converter.
 
 Provides error categorization, collection, and report generation
 for tracking conversion issues and generating actionable reports.
+
+Error Code Format: RPT-XXXX
+- RPT-1xxx: Extraction errors
+- RPT-2xxx: Parsing errors
+- RPT-3xxx: Formula errors
+- RPT-4xxx: Type errors
+- RPT-5xxx: Layout errors
+- RPT-6xxx: Connection errors
+- RPT-7xxx: Subreport errors
+- RPT-8xxx: Generation errors
+- RPT-9xxx: General/Configuration errors
 """
 
+import csv
+import html
+import io
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
-import html
-import csv
-import json
+
+
+class ErrorCode(Enum):
+    """Standardized error codes for the converter.
+
+    Format: RPT-XXXX where X is a digit.
+    - 1xxx: Extraction errors
+    - 2xxx: Parsing errors
+    - 3xxx: Formula errors
+    - 4xxx: Type errors
+    - 5xxx: Layout errors
+    - 6xxx: Connection errors
+    - 7xxx: Subreport errors
+    - 8xxx: Generation errors
+    - 9xxx: General/Configuration errors
+    """
+
+    # Extraction errors (1xxx)
+    EXTRACTION_FAILED = "RPT-1001"
+    EXTRACTION_TIMEOUT = "RPT-1002"
+    RPT_FILE_NOT_FOUND = "RPT-1003"
+    RPT_FILE_CORRUPT = "RPT-1004"
+    RPT_FILE_EMPTY = "RPT-1005"
+    RPTTOXML_NOT_FOUND = "RPT-1006"
+    CRYSTAL_SDK_ERROR = "RPT-1007"
+
+    # Parsing errors (2xxx)
+    XML_PARSE_ERROR = "RPT-2001"
+    XML_INVALID_STRUCTURE = "RPT-2002"
+    MISSING_ROOT_ELEMENT = "RPT-2003"
+    MISSING_REQUIRED_ELEMENT = "RPT-2004"
+    INVALID_ATTRIBUTE_VALUE = "RPT-2005"
+    ENCODING_ERROR = "RPT-2006"
+
+    # Formula errors (3xxx)
+    FORMULA_SYNTAX_ERROR = "RPT-3001"
+    FORMULA_FUNCTION_UNKNOWN = "RPT-3002"
+    FORMULA_FIELD_NOT_FOUND = "RPT-3003"
+    FORMULA_TYPE_MISMATCH = "RPT-3004"
+    FORMULA_CIRCULAR_REF = "RPT-3005"
+    FORMULA_UNSUPPORTED_FEATURE = "RPT-3006"
+    FORMULA_CONVERSION_PARTIAL = "RPT-3007"
+
+    # Type errors (4xxx)
+    TYPE_UNMAPPED = "RPT-4001"
+    TYPE_CONVERSION_FAILED = "RPT-4002"
+    TYPE_PRECISION_LOSS = "RPT-4003"
+    TYPE_OVERFLOW = "RPT-4004"
+
+    # Layout errors (5xxx)
+    LAYOUT_TOO_COMPLEX = "RPT-5001"
+    LAYOUT_NESTED_TOO_DEEP = "RPT-5002"
+    COORDINATE_OVERFLOW = "RPT-5003"
+    SECTION_OVERLAP = "RPT-5004"
+    FONT_NOT_FOUND = "RPT-5005"
+    IMAGE_NOT_FOUND = "RPT-5006"
+
+    # Connection errors (6xxx)
+    CONNECTION_FAILED = "RPT-6001"
+    CONNECTION_TYPE_UNSUPPORTED = "RPT-6002"
+    CONNECTION_STRING_INVALID = "RPT-6003"
+    DATABASE_NOT_FOUND = "RPT-6004"
+    AUTHENTICATION_FAILED = "RPT-6005"
+
+    # Subreport errors (7xxx)
+    SUBREPORT_NOT_FOUND = "RPT-7001"
+    SUBREPORT_NESTED_TOO_DEEP = "RPT-7002"
+    SUBREPORT_CIRCULAR_REF = "RPT-7003"
+    SUBREPORT_PARAM_MISMATCH = "RPT-7004"
+
+    # Generation errors (8xxx)
+    XML_GENERATION_FAILED = "RPT-8001"
+    RDF_CONVERSION_FAILED = "RPT-8002"
+    RWCONVERTER_ERROR = "RPT-8003"
+    RWCONVERTER_TIMEOUT = "RPT-8004"
+    RWCONVERTER_NOT_FOUND = "RPT-8005"
+    OUTPUT_WRITE_FAILED = "RPT-8006"
+
+    # General/Configuration errors (9xxx)
+    CONFIGURATION_INVALID = "RPT-9001"
+    CONFIGURATION_MISSING = "RPT-9002"
+    PERMISSION_DENIED = "RPT-9003"
+    DISK_FULL = "RPT-9004"
+    MEMORY_ERROR = "RPT-9005"
+    UNKNOWN_ERROR = "RPT-9999"
+
+
+# Mapping from ErrorCode to user-friendly descriptions and suggested fixes
+ERROR_DETAILS: dict[ErrorCode, dict[str, str]] = {
+    # Extraction errors
+    ErrorCode.EXTRACTION_FAILED: {
+        "description": "Failed to extract report content from RPT file",
+        "suggestion": "Ensure the RPT file is valid and not corrupted. Try opening it in Crystal Reports.",
+    },
+    ErrorCode.EXTRACTION_TIMEOUT: {
+        "description": "Extraction process timed out",
+        "suggestion": "Increase timeout in configuration or check for issues with the report file.",
+    },
+    ErrorCode.RPT_FILE_NOT_FOUND: {
+        "description": "The specified RPT file was not found",
+        "suggestion": "Verify the file path is correct and the file exists.",
+    },
+    ErrorCode.RPT_FILE_CORRUPT: {
+        "description": "The RPT file appears to be corrupted",
+        "suggestion": "Try opening the file in Crystal Reports to verify it's valid.",
+    },
+    ErrorCode.RPT_FILE_EMPTY: {
+        "description": "The RPT file is empty",
+        "suggestion": "Ensure you're pointing to the correct file.",
+    },
+    ErrorCode.RPTTOXML_NOT_FOUND: {
+        "description": "RptToXml tool not found",
+        "suggestion": "Ensure RptToXml is installed and the path is configured correctly.",
+    },
+    ErrorCode.CRYSTAL_SDK_ERROR: {
+        "description": "Crystal Reports SDK error",
+        "suggestion": "Ensure Crystal Reports runtime is installed correctly.",
+    },
+    # Parsing errors
+    ErrorCode.XML_PARSE_ERROR: {
+        "description": "Failed to parse XML content",
+        "suggestion": "The extracted XML may be malformed. Check the extraction step.",
+    },
+    ErrorCode.XML_INVALID_STRUCTURE: {
+        "description": "XML structure is invalid or unexpected",
+        "suggestion": "The report may use an unsupported Crystal Reports version.",
+    },
+    ErrorCode.MISSING_ROOT_ELEMENT: {
+        "description": "XML is missing the root element",
+        "suggestion": "The extraction may have failed silently. Re-run extraction.",
+    },
+    ErrorCode.MISSING_REQUIRED_ELEMENT: {
+        "description": "A required element is missing from the report",
+        "suggestion": "The report may be incomplete or using unsupported features.",
+    },
+    # Formula errors
+    ErrorCode.FORMULA_SYNTAX_ERROR: {
+        "description": "Formula has a syntax error",
+        "suggestion": "Check the formula syntax in Crystal Reports and fix any errors.",
+    },
+    ErrorCode.FORMULA_FUNCTION_UNKNOWN: {
+        "description": "Formula uses an unknown or unsupported function",
+        "suggestion": "The function may need manual conversion to PL/SQL equivalent.",
+    },
+    ErrorCode.FORMULA_FIELD_NOT_FOUND: {
+        "description": "Formula references a field that doesn't exist",
+        "suggestion": "Verify field names in the formula match the data source.",
+    },
+    ErrorCode.FORMULA_UNSUPPORTED_FEATURE: {
+        "description": "Formula uses an unsupported Crystal Reports feature",
+        "suggestion": "This feature requires manual conversion to Oracle Reports.",
+    },
+    ErrorCode.FORMULA_CONVERSION_PARTIAL: {
+        "description": "Formula was partially converted with some manual work needed",
+        "suggestion": "Review the generated PL/SQL and complete any placeholder sections.",
+    },
+    # Type errors
+    ErrorCode.TYPE_UNMAPPED: {
+        "description": "Data type has no Oracle equivalent mapping",
+        "suggestion": "Add a custom type mapping in the configuration.",
+    },
+    ErrorCode.TYPE_CONVERSION_FAILED: {
+        "description": "Failed to convert data type",
+        "suggestion": "Check if the data type is supported and add a custom mapping if needed.",
+    },
+    ErrorCode.TYPE_PRECISION_LOSS: {
+        "description": "Type conversion may result in precision loss",
+        "suggestion": "Review the Oracle type and adjust precision as needed.",
+    },
+    # Layout errors
+    ErrorCode.LAYOUT_TOO_COMPLEX: {
+        "description": "Report layout is too complex for automatic conversion",
+        "suggestion": "Simplify the layout or convert complex sections manually.",
+    },
+    ErrorCode.LAYOUT_NESTED_TOO_DEEP: {
+        "description": "Layout nesting exceeds supported depth",
+        "suggestion": "Reduce nesting depth or flatten the layout structure.",
+    },
+    ErrorCode.COORDINATE_OVERFLOW: {
+        "description": "Field coordinates exceed Oracle Reports limits",
+        "suggestion": "Adjust field positions to fit within Oracle Reports bounds.",
+    },
+    ErrorCode.FONT_NOT_FOUND: {
+        "description": "Font used in report is not available",
+        "suggestion": "Add a font mapping in the configuration or install the font.",
+    },
+    # Connection errors
+    ErrorCode.CONNECTION_FAILED: {
+        "description": "Failed to establish database connection",
+        "suggestion": "Verify connection string and database availability.",
+    },
+    ErrorCode.CONNECTION_TYPE_UNSUPPORTED: {
+        "description": "Database connection type is not supported",
+        "suggestion": "Convert to a supported connection type (ODBC, JDBC, Native).",
+    },
+    # Subreport errors
+    ErrorCode.SUBREPORT_NOT_FOUND: {
+        "description": "Referenced subreport file not found",
+        "suggestion": "Ensure all subreport files are in the same directory.",
+    },
+    ErrorCode.SUBREPORT_NESTED_TOO_DEEP: {
+        "description": "Subreport nesting exceeds supported depth",
+        "suggestion": "Reduce subreport nesting or inline subreport content.",
+    },
+    ErrorCode.SUBREPORT_CIRCULAR_REF: {
+        "description": "Circular subreport reference detected",
+        "suggestion": "Remove the circular reference in the report structure.",
+    },
+    # Generation errors
+    ErrorCode.XML_GENERATION_FAILED: {
+        "description": "Failed to generate Oracle Reports XML",
+        "suggestion": "Check the transformation output for errors.",
+    },
+    ErrorCode.RDF_CONVERSION_FAILED: {
+        "description": "Failed to convert XML to RDF format",
+        "suggestion": "Verify rwconverter is working and the XML is valid.",
+    },
+    ErrorCode.RWCONVERTER_ERROR: {
+        "description": "rwconverter reported an error",
+        "suggestion": "Check the rwconverter output for specific error details.",
+    },
+    ErrorCode.RWCONVERTER_TIMEOUT: {
+        "description": "rwconverter process timed out",
+        "suggestion": "Increase timeout or check for issues with the Oracle installation.",
+    },
+    ErrorCode.RWCONVERTER_NOT_FOUND: {
+        "description": "rwconverter utility not found",
+        "suggestion": "Verify ORACLE_HOME is set correctly and rwconverter is installed.",
+    },
+    # Configuration errors
+    ErrorCode.CONFIGURATION_INVALID: {
+        "description": "Configuration file is invalid",
+        "suggestion": "Check the configuration file syntax and required fields.",
+    },
+    ErrorCode.CONFIGURATION_MISSING: {
+        "description": "Required configuration is missing",
+        "suggestion": "Create a configuration file or set required environment variables.",
+    },
+    ErrorCode.UNKNOWN_ERROR: {
+        "description": "An unexpected error occurred",
+        "suggestion": "Check the logs for more details and report if this persists.",
+    },
+}
+
+
+def get_error_details(code: ErrorCode) -> dict[str, str]:
+    """Get description and suggestion for an error code.
+
+    Args:
+        code: The error code to look up.
+
+    Returns:
+        Dictionary with 'description' and 'suggestion' keys.
+    """
+    return ERROR_DETAILS.get(code, {
+        "description": "Unknown error",
+        "suggestion": "Check the logs for more details.",
+    })
 
 
 class ErrorCategory(Enum):
-    """Categories of conversion errors."""
+    """Categories of conversion errors (legacy, maps to ErrorCode)."""
 
     # Extraction errors
     EXTRACTION_FAILED = "extraction_failed"
@@ -65,12 +335,57 @@ class ErrorCategory(Enum):
     CONFIGURATION_ERROR = "configuration_error"
 
 
+# Mapping from ErrorCategory to ErrorCode for backward compatibility
+CATEGORY_TO_CODE: dict[ErrorCategory, ErrorCode] = {
+    ErrorCategory.EXTRACTION_FAILED: ErrorCode.EXTRACTION_FAILED,
+    ErrorCategory.EXTRACTION_TIMEOUT: ErrorCode.EXTRACTION_TIMEOUT,
+    ErrorCategory.RPT_CORRUPT: ErrorCode.RPT_FILE_CORRUPT,
+    ErrorCategory.PARSE_ERROR: ErrorCode.XML_PARSE_ERROR,
+    ErrorCategory.XML_INVALID: ErrorCode.XML_INVALID_STRUCTURE,
+    ErrorCategory.MISSING_ELEMENT: ErrorCode.MISSING_REQUIRED_ELEMENT,
+    ErrorCategory.FORMULA_UNSUPPORTED: ErrorCode.FORMULA_UNSUPPORTED_FEATURE,
+    ErrorCategory.FORMULA_SYNTAX_ERROR: ErrorCode.FORMULA_SYNTAX_ERROR,
+    ErrorCategory.FORMULA_FUNCTION_UNKNOWN: ErrorCode.FORMULA_FUNCTION_UNKNOWN,
+    ErrorCategory.TYPE_UNMAPPED: ErrorCode.TYPE_UNMAPPED,
+    ErrorCategory.TYPE_CONVERSION_ERROR: ErrorCode.TYPE_CONVERSION_FAILED,
+    ErrorCategory.LAYOUT_COMPLEX: ErrorCode.LAYOUT_TOO_COMPLEX,
+    ErrorCategory.LAYOUT_NESTED_TOO_DEEP: ErrorCode.LAYOUT_NESTED_TOO_DEEP,
+    ErrorCategory.COORDINATE_OVERFLOW: ErrorCode.COORDINATE_OVERFLOW,
+    ErrorCategory.CONNECTION_ERROR: ErrorCode.CONNECTION_FAILED,
+    ErrorCategory.CONNECTION_TYPE_UNSUPPORTED: ErrorCode.CONNECTION_TYPE_UNSUPPORTED,
+    ErrorCategory.SUBREPORT_NESTED: ErrorCode.SUBREPORT_NESTED_TOO_DEEP,
+    ErrorCategory.SUBREPORT_NOT_FOUND: ErrorCode.SUBREPORT_NOT_FOUND,
+    ErrorCategory.SUBREPORT_CIRCULAR: ErrorCode.SUBREPORT_CIRCULAR_REF,
+    ErrorCategory.XML_GENERATION_ERROR: ErrorCode.XML_GENERATION_FAILED,
+    ErrorCategory.TEMPLATE_ERROR: ErrorCode.XML_GENERATION_FAILED,
+    ErrorCategory.RDF_CONVERSION_FAILED: ErrorCode.RDF_CONVERSION_FAILED,
+    ErrorCategory.RWCONVERTER_ERROR: ErrorCode.RWCONVERTER_ERROR,
+    ErrorCategory.RWCONVERTER_TIMEOUT: ErrorCode.RWCONVERTER_TIMEOUT,
+    ErrorCategory.UNKNOWN_ERROR: ErrorCode.UNKNOWN_ERROR,
+    ErrorCategory.CONFIGURATION_ERROR: ErrorCode.CONFIGURATION_INVALID,
+}
+
+
 @dataclass
 class ConversionError:
-    """Represents a single conversion error or warning."""
+    """Represents a single conversion error or warning.
+
+    Attributes:
+        category: Legacy error category (use error_code for new code).
+        message: Human-readable error message.
+        error_code: Standardized error code (RPT-XXXX format).
+        element_type: Type of element that caused the error (formula, field, etc.).
+        element_name: Name of the element that caused the error.
+        original_value: Original value that triggered the error.
+        suggested_fix: Suggested action to resolve the error.
+        is_fatal: Whether this error should halt processing.
+        timestamp: When the error occurred.
+        context: Additional context information.
+    """
 
     category: ErrorCategory
     message: str
+    error_code: Optional[ErrorCode] = None
     element_type: Optional[str] = None  # formula, field, section, etc.
     element_name: Optional[str] = None
     original_value: Optional[str] = None
@@ -79,11 +394,38 @@ class ConversionError:
     timestamp: datetime = field(default_factory=datetime.now)
     context: dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self):
+        """Set error_code from category if not provided."""
+        if self.error_code is None and self.category in CATEGORY_TO_CODE:
+            self.error_code = CATEGORY_TO_CODE[self.category]
+
+        # Auto-populate suggested_fix from error details if not provided
+        if self.suggested_fix is None and self.error_code:
+            details = get_error_details(self.error_code)
+            self.suggested_fix = details.get("suggestion")
+
+    @property
+    def code(self) -> str:
+        """Get the error code string (e.g., 'RPT-1001')."""
+        if self.error_code:
+            return self.error_code.value
+        return "RPT-9999"
+
+    @property
+    def description(self) -> str:
+        """Get the error description from error details."""
+        if self.error_code:
+            details = get_error_details(self.error_code)
+            return details.get("description", self.message)
+        return self.message
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
+            "code": self.code,
             "category": self.category.value,
             "message": self.message,
+            "description": self.description,
             "element_type": self.element_type,
             "element_name": self.element_name,
             "original_value": self.original_value,
@@ -92,6 +434,25 @@ class ConversionError:
             "timestamp": self.timestamp.isoformat(),
             "context": self.context,
         }
+
+    def format_message(self, verbose: bool = False) -> str:
+        """Format the error message for display.
+
+        Args:
+            verbose: If True, include additional details.
+
+        Returns:
+            Formatted error message string.
+        """
+        parts = [f"[{self.code}]", self.message]
+
+        if self.element_name:
+            parts.insert(1, f"({self.element_type}: {self.element_name})")
+
+        if verbose and self.suggested_fix:
+            parts.append(f"\n  Suggestion: {self.suggested_fix}")
+
+        return " ".join(parts)
 
 
 @dataclass
