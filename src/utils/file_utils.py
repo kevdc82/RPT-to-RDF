@@ -8,10 +8,10 @@ and file discovery.
 import re
 import shutil
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Union
 
 
-def ensure_directory(path: str | Path) -> Path:
+def ensure_directory(path: Union[str, Path]) -> Path:
     """Ensure a directory exists, creating it if necessary.
 
     Args:
@@ -55,7 +55,7 @@ def safe_filename(name: str, replacement: str = "_") -> str:
 
 
 def get_rpt_files(
-    directory: str | Path,
+    directory: Union[str, Path],
     recursive: bool = True,
     pattern: str = "*.rpt",
 ) -> Iterator[Path]:
